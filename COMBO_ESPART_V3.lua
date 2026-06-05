@@ -33,7 +33,27 @@ if settings.comboSpellCCooldownMs == nil then settings.comboSpellCCooldownMs = 1
 if settings.comboSpellCSlot == nil then settings.comboSpellCSlot = 3 end
 if settings.smartSafetyMarginMs == nil then settings.smartSafetyMarginMs = 1000 end
 if settings.autoRotationIntervalMs == nil then settings.autoRotationIntervalMs = 200 end
+if settings.smartCastConfirmMs == nil then settings.smartCastConfirmMs = 500 end
+if settings.smartRetryAfterFailMs == nil then settings.smartRetryAfterFailMs = 250 end
 if settings.allowBBeforeFirstCombo == nil then settings.allowBBeforeFirstCombo = false end
+if settings.smartStatusHudEnabled == nil then settings.smartStatusHudEnabled = true end
+if settings.trapEnabled == nil then settings.trapEnabled = false end
+if settings.trapRuneId == nil then settings.trapRuneId = 3180 end
+if settings.trapStepMs == nil then settings.trapStepMs = 180 end
+if settings.trapCooldownMs == nil then settings.trapCooldownMs = 1500 end
+if settings.trapMaxTiles == nil then settings.trapMaxTiles = 24 end
+if settings.trapWallIdsText == nil then settings.trapWallIdsText = "2128, 2129, 2130" end
+if settings.trapPatternVersion == nil then
+  local okTrapMax, trapMax = pcall(function() return tonumber(settings.trapMaxTiles) end)
+  if not okTrapMax or not trapMax or trapMax <= 8 then settings.trapMaxTiles = 24 end
+  settings.trapPatternVersion = 2
+end
+if settings.autoSelectVocationFromServer == nil then settings.autoSelectVocationFromServer = true end
+if settings.presetVocation == nil then settings.presetVocation = "" end
+if settings.detectedVocation == nil then settings.detectedVocation = "" end
+if settings.presetUseA == nil then settings.presetUseA = true end
+if settings.presetBChoice == nil then settings.presetBChoice = 1 end
+if settings.presetCChoice == nil then settings.presetCChoice = 1 end
 if settings.targetLockMs == nil then settings.targetLockMs = 1600 end
 if type(settings.leaderList) ~= "table" then settings.leaderList = {} end
 
@@ -48,6 +68,146 @@ end
 
 local function sameName(a, b)
   return normalizeName(a) ~= "" and normalizeName(a) == normalizeName(b)
+end
+
+local function migrateLegacySpellNames()
+  for _, key in ipairs({"comboSpell", "comboSpell2", "comboSpell3", "comboSpell4", "autoSpellB"}) do
+    if normalizeName(settings[key]) == "exori gran max frigo" then
+      settings[key] = "exori max frigo"
+    end
+  end
+end
+
+migrateLegacySpellNames()
+
+local function normalizeVocationName(value)
+  local v = normalizeName(value)
+  if v == "1" or v == "5" or v == "sorcerer" or v == "ms" or v == "master sorcerer" then return "sorcerer" end
+  if v == "2" or v == "6" or v == "druid" or v == "ed" or v == "elder druid" then return "druid" end
+  if v == "3" or v == "7" or v == "paladin" or v == "rp" or v == "royal paladin" then return "paladin" end
+  if v == "4" or v == "8" or v == "knight" or v == "ek" or v == "elite knight" then return "knight" end
+  return ""
+end
+
+local vocationPresetSpells = {
+  sorcerer = {
+    label = "MS - Sorcerer",
+    a = nil,
+    b = {
+      { label = "Vis Hur", spell = "exevo vis hur", cd = 6000 },
+      { label = "Max Vis", spell = "exori max vis", cd = 6000 }
+    },
+    c = {
+      { label = "Gran Mas Vis", spell = "exevo gran mas vis", cd = 12000 },
+      { label = "Gran Mas Flam", spell = "exevo gran mas flam", cd = 16000 }
+    }
+  },
+  druid = {
+    label = "ED - Druid",
+    a = nil,
+    b = {
+      { label = "Tera Hur", spell = "exevo tera hur", cd = 6000 },
+      { label = "Max Frigo", spell = "exori max frigo", cd = 5000 }
+    },
+    c = {
+      { label = "Gran Mas Tera", spell = "exevo gran mas tera", cd = 12000 },
+      { label = "Gran Mas Frigo", spell = "exevo gran mas frigo", cd = 16000 }
+    }
+  },
+  paladin = {
+    label = "RP - Paladin",
+    a = { label = "Exori Con", spell = "exori con", cd = 2000 },
+    b = {
+      { label = "Gran Con", spell = "exori gran con", cd = 5000 }
+    },
+    c = {
+      { label = "Mas San", spell = "exevo mas san", cd = 12000 }
+    }
+  },
+  knight = {
+    label = "EK - Knight",
+    a = { label = "Exori Ico", spell = "exori ico", cd = 2000 },
+    b = {
+      { label = "Gran Ico", spell = "exori gran ico", cd = 6000 }
+    },
+    c = {
+      { label = "Exori Gran", spell = "exori gran", cd = 10000 }
+    }
+  }
+}
+
+local presetVocationOrder = {"sorcerer", "druid", "paladin", "knight"}
+
+local function getPresetVocation()
+  local detected = normalizeVocationName(settings.detectedVocation)
+  local selected = normalizeVocationName(settings.presetVocation)
+  if settings.autoSelectVocationFromServer == true and detected ~= "" then return detected end
+  if selected ~= "" then return selected end
+  if detected ~= "" then return detected end
+  return ""
+end
+
+local function getVocationPresetConfig(vocation)
+  vocation = normalizeVocationName(vocation)
+  if vocation == "" then vocation = getPresetVocation() end
+  return vocationPresetSpells[vocation], vocation
+end
+
+local function getPresetChoiceIndex(groupKey, options)
+  local key = groupKey == "c" and "presetCChoice" or "presetBChoice"
+  local total = type(options) == "table" and #options or 0
+  if total <= 0 then
+    settings[key] = 1
+    return 1
+  end
+
+  local ok, value = pcall(function() return tonumber(settings[key]) end)
+  local index = math.floor((ok and value) or 1)
+  if index < 1 then index = 1 end
+  if index > total then index = total end
+  settings[key] = index
+  return index
+end
+
+local function getSelectedPresetSpell(groupKey)
+  local config = getVocationPresetConfig()
+  if not config then return nil end
+
+  if groupKey == "a" then return config.a end
+
+  local options = config[groupKey]
+  local index = getPresetChoiceIndex(groupKey, options)
+  return options and options[index] or nil
+end
+
+local function formatPresetVocationLabel(vocation)
+  local config
+  config, vocation = getVocationPresetConfig(vocation)
+  return config and config.label or "Aguardando"
+end
+
+local function detectVocationFromText(text)
+  text = tostring(text or "")
+  if text == "" or not text:find("%[VOCATION%]") then return nil end
+
+  local id, label = text:match("%[VOCATION%]%s*(%d+)%s*|%s*([^%[%]\r\n]+)")
+  local vocation = normalizeVocationName(id)
+  if vocation == "" then vocation = normalizeVocationName(label) end
+  if vocation == "" then
+    local lower = normalizeName(text)
+    if lower:find("sorcerer", 1, true) or lower:find("master sorcerer", 1, true) then vocation = "sorcerer" end
+    if lower:find("druid", 1, true) or lower:find("elder druid", 1, true) then vocation = "druid" end
+    if lower:find("paladin", 1, true) or lower:find("royal paladin", 1, true) then vocation = "paladin" end
+    if lower:find("knight", 1, true) or lower:find("elite knight", 1, true) then vocation = "knight" end
+  end
+  if vocation == "" then return nil end
+
+  settings.detectedVocation = vocation
+  if settings.autoSelectVocationFromServer == true then
+    settings.presetVocation = vocation
+  end
+
+  return vocation
 end
 
 local function timeMs()
@@ -162,10 +322,37 @@ local function safeCreatureId(creature)
   return nil
 end
 
+local function safeCreaturePosition(creature)
+  if not creature or not creature.getPosition then return nil end
+  local ok, position = pcall(function() return creature:getPosition() end)
+  if not ok or not position or not position.x or not position.y or not position.z then return nil end
+  return {x = position.x, y = position.y, z = position.z}
+end
+
+local function getLocalPlayerPositionSafe()
+  return safeCreaturePosition(player)
+end
+
+local function samePosition(a, b)
+  return a and b and a.x == b.x and a.y == b.y and a.z == b.z
+end
+
+local function positionKey(position)
+  if not position then return "" end
+  return tostring(position.x) .. "," .. tostring(position.y) .. "," .. tostring(position.z)
+end
+
 local function isLocalPlayerName(name)
   if not player or not player.getName then return false end
   local ok, playerName = pcall(function() return player:getName() end)
   return ok and sameName(name, playerName)
+end
+
+local function getLocalPlayerNameSafe()
+  if not player or not player.getName then return "" end
+  local ok, playerName = pcall(function() return player:getName() end)
+  if ok then return trimText(playerName) end
+  return ""
 end
 
 local function getCreatureByNameSafe(name)
@@ -448,7 +635,10 @@ local smartRotation = {
     A = 0,
     B = 0
   },
-  lastSpellCastAt = {}
+  lastSpellCastAt = {},
+  pendingAutoCast = nil,
+  pendingSeq = 0,
+  nextRetryAt = 0
 }
 
 local nextSmartRotationCheckAt = 0
@@ -462,6 +652,7 @@ local function getSmartRotationStatus()
 
   local tm = timeMs()
   if toNumber(smartRotation.comboExecutingUntil, 0) > tm then return "COMBO EXECUTANDO" end
+  if smartRotation.pendingAutoCast then return "CONFIRMANDO" end
   if smartRotation.nextComboReadyAt and tm >= smartRotation.nextComboReadyAt then
     return "AGUARDANDO CALLER COMBO"
   end
@@ -528,11 +719,13 @@ local function canAutoCastSmartSpell(group, spell, cooldown)
   spell = trimText(spell)
   cooldown = toNumber(cooldown, 0)
   if settings.smartRotationEnabled ~= true then return false end
+  if smartRotation.pendingAutoCast then return false end
   if spell == "" or cooldown <= 0 then return false end
   if isForbiddenAutoSpell(spell) then return false end
   if not hasAttackTargetSafe() then return false end
 
   local tm = timeMs()
+  if tm < toNumber(smartRotation.nextRetryAt, 0) then return false end
   if tm < toNumber(smartRotation.comboExecutingUntil, 0) then return false end
 
   local lastGroupCast = toNumber(smartRotation.lastAutoCastAt[group], 0)
@@ -550,18 +743,102 @@ local function canAutoCastSmartSpell(group, spell, cooldown)
   return tm + cooldown + margin <= smartRotation.nextComboReadyAt
 end
 
+local function confirmPendingSmartCast(seq)
+  local pending = smartRotation.pendingAutoCast
+  if not pending or pending.seq ~= seq then return false end
+
+  smartRotation.pendingAutoCast = nil
+  if pending.failed == true then return false end
+
+  local castAt = toNumber(pending.startedAt, timeMs())
+  smartRotation.lastAutoCastAt[pending.group] = castAt
+  rememberSmartSpellCast(pending.spell, castAt)
+  setSmartRotationStatus("PLANEJANDO")
+  return true
+end
+
+local function beginPendingSmartCast(group, spell, cooldown, startedAt)
+  local confirmMs = settingNumber("smartCastConfirmMs", 500, 100, 2000)
+  smartRotation.pendingSeq = toNumber(smartRotation.pendingSeq, 0) + 1
+  local seq = smartRotation.pendingSeq
+
+  smartRotation.pendingAutoCast = {
+    seq = seq,
+    group = group,
+    spell = spell,
+    cooldown = cooldown,
+    startedAt = toNumber(startedAt, timeMs()),
+    confirmAt = timeMs() + confirmMs,
+    failed = false
+  }
+
+  setSmartRotationStatus("CONFIRMANDO")
+
+  if schedule then
+    schedule(confirmMs, function()
+      confirmPendingSmartCast(seq)
+    end)
+  else
+    confirmPendingSmartCast(seq)
+  end
+end
+
 local function castAutoSmartSpell(group, spell, cooldown)
   if not canAutoCastSmartSpell(group, spell, cooldown) then return false end
 
   local tm = timeMs()
   if castSingleComboSpell(spell) then
-    smartRotation.lastAutoCastAt[group] = tm
-    rememberSmartSpellCast(spell, tm)
-    setSmartRotationStatus("PLANEJANDO")
+    beginPendingSmartCast(group, spell, cooldown, tm)
     return true
   end
 
+  smartRotation.nextRetryAt = tm + settingNumber("smartRetryAfterFailMs", 250, 100, 2000)
   return false
+end
+
+local function isSmartCastFailureText(text)
+  local lower = normalizeName(text)
+  if lower == "" then return false end
+
+  local needles = {
+    "not enough mana",
+    "do not have enough mana",
+    "don't have enough mana",
+    "mana insuficiente",
+    "sem mana",
+    "falta mana",
+    "you are exhausted",
+    "you are still exhausted",
+    "exhausted",
+    "cooldown",
+    "wait before",
+    "not possible",
+    "you cannot",
+    "you may not",
+    "can't cast",
+    "cannot cast"
+  }
+
+  for _, needle in ipairs(needles) do
+    if lower:find(needle, 1, true) then return true end
+  end
+
+  return false
+end
+
+local function handleSmartCastFailureText(text)
+  local pending = smartRotation.pendingAutoCast
+  if not pending or not isSmartCastFailureText(text) then return false end
+
+  local tm = timeMs()
+  local confirmAt = toNumber(pending.confirmAt, tm)
+  if tm > confirmAt + 250 then return false end
+
+  pending.failed = true
+  smartRotation.pendingAutoCast = nil
+  smartRotation.nextRetryAt = tm + settingNumber("smartRetryAfterFailMs", 250, 100, 2000)
+  setSmartRotationStatus("PLANEJANDO")
+  return true
 end
 
 local function runSmartRotation()
@@ -634,9 +911,319 @@ local targetLock = {
   untilMs = 0
 }
 
+local comboTarget = {
+  id = nil,
+  name = "",
+  lastAt = 0
+}
+
+local trapState = {
+  lastTrapAt = 0
+}
+
 local function isTargetLockActive(tm)
   tm = tm or timeMs()
   return targetLock.name ~= "" and toNumber(targetLock.untilMs, 0) > tm
+end
+
+local function rememberComboTarget(creature, targetName)
+  comboTarget.id = safeCreatureId(creature)
+  comboTarget.name = trimText(safeCreatureName(creature) or targetName or "")
+  comboTarget.lastAt = timeMs()
+end
+
+local function getCurrentAttackCreatureSafe()
+  if not g_game or type(g_game.getAttackingCreature) ~= "function" then return nil end
+  local ok, creature = pcall(function() return g_game.getAttackingCreature() end)
+  if ok then return creature end
+  return nil
+end
+
+local function getComboTargetCreature()
+  local targetId = toNumber(comboTarget.id)
+  if targetId then
+    local creature = getCreatureByIdSafe(targetId)
+    if creature and safeCreaturePosition(creature) then return creature end
+  end
+
+  local targetName = trimText(comboTarget.name)
+  if targetName ~= "" then
+    local creature = getCreatureByNameSafe(targetName)
+    if creature and safeCreaturePosition(creature) then return creature end
+  end
+
+  targetName = trimText(targetLock.name)
+  if targetName ~= "" then
+    local creature = getCreatureByNameSafe(targetName)
+    if creature and safeCreaturePosition(creature) then return creature end
+  end
+
+  local current = getCurrentAttackCreatureSafe()
+  if current and safeCreaturePosition(current) then return current end
+
+  return nil
+end
+
+local function getBattlePlayerByName(name)
+  name = trimText(name)
+  if name == "" then return nil end
+
+  for _, spec in ipairs(getBattleSpectatorsSafe()) do
+    if creatureIsPlayerSafe(spec) and sameName(safeCreatureName(spec), name) then
+      return spec
+    end
+  end
+
+  return nil
+end
+
+local function signNumber(value)
+  if value > 0 then return 1 end
+  if value < 0 then return -1 end
+  return 0
+end
+
+local function getDirectionStepFromSource(targetPos, sourcePos)
+  if not targetPos or not sourcePos or targetPos.z ~= sourcePos.z then return 0, 0, 0 end
+
+  local dx = sourcePos.x - targetPos.x
+  local dy = sourcePos.y - targetPos.y
+  if dx == 0 and dy == 0 then return 0, 0, 0 end
+
+  local absDx = math.abs(dx)
+  local absDy = math.abs(dy)
+  local stepX, stepY = 0, 0
+
+  if absDx == absDy and absDx > 0 then
+    stepX = signNumber(dx)
+    stepY = signNumber(dy)
+  elseif absDx > absDy then
+    stepX = signNumber(dx)
+  else
+    stepY = signNumber(dy)
+  end
+
+  return stepX, stepY, math.max(absDx, absDy)
+end
+
+local function markOpenTrapLine(open, targetPos, sourcePos, maxRadius)
+  if type(open) ~= "table" then return end
+  local stepX, stepY, distance = getDirectionStepFromSource(targetPos, sourcePos)
+  if stepX == 0 and stepY == 0 then return end
+
+  local maxStep = math.min(maxRadius or 2, math.max(1, distance - 1))
+  for step = 1, maxStep do
+    local openPos = {x = targetPos.x + (stepX * step), y = targetPos.y + (stepY * step), z = targetPos.z}
+    open[positionKey(openPos)] = true
+  end
+end
+
+local function hashText(text)
+  text = tostring(text or "")
+  local hash = 0
+  for i = 1, #text do
+    hash = (hash + (text:byte(i) or 0) * i) % 9973
+  end
+  return hash
+end
+
+local function parseTrapWallIds()
+  local ids = {}
+  for rawId in tostring(settings.trapWallIdsText or ""):gmatch("%d+") do
+    local id = toNumber(rawId)
+    if id then ids[id] = true end
+  end
+  return ids
+end
+
+local function safeThingId(thing)
+  if not thing or not thing.getId then return nil end
+  local ok, id = pcall(function() return thing:getId() end)
+  if ok then return toNumber(id) end
+  return nil
+end
+
+local function getTileSafe(tilePos)
+  if not tilePos or not g_map or not g_map.getTile then return nil end
+  local ok, tile = pcall(function() return g_map.getTile(tilePos) end)
+  if ok then return tile end
+  return nil
+end
+
+local function tileCanShootSafe(tile)
+  if not tile then return false end
+  if tile.canShoot then
+    local ok, canShoot = pcall(function() return tile:canShoot() end)
+    if ok then return canShoot ~= false end
+  end
+  return true
+end
+
+local function tileHasTrapWall(tile, wallIds)
+  if not tile or type(wallIds) ~= "table" then return false end
+
+  local function hasWallId(thing)
+    local id = safeThingId(thing)
+    return id and wallIds[id] == true
+  end
+
+  if tile.getItems then
+    local ok, items = pcall(function() return tile:getItems() end)
+    if ok and items then
+      for _, item in ipairs(items) do
+        if hasWallId(item) then return true end
+      end
+    end
+  end
+
+  if tile.getThings then
+    local ok, things = pcall(function() return tile:getThings() end)
+    if ok and things then
+      for _, thing in ipairs(things) do
+        if hasWallId(thing) then return true end
+      end
+    end
+  end
+
+  local topThing = nil
+  if tile.getTopUseThing then
+    local ok, thing = pcall(function() return tile:getTopUseThing() end)
+    if ok then topThing = thing end
+  end
+  if hasWallId(topThing) then return true end
+
+  return false
+end
+
+local function tileHasCreatureSafe(tile)
+  if not tile or not tile.getCreatures then return false end
+  local ok, creatures = pcall(function() return tile:getCreatures() end)
+  return ok and creatures and #creatures > 0
+end
+
+local function useTrapRuneOnTile(tile)
+  if not tile then return false end
+
+  local topThing = nil
+  if tile.getTopUseThing then
+    local ok, thing = pcall(function() return tile:getTopUseThing() end)
+    if ok then topThing = thing end
+  end
+  if not topThing and tile.getTopThing then
+    local ok, thing = pcall(function() return tile:getTopThing() end)
+    if ok then topThing = thing end
+  end
+  if not topThing then return false end
+
+  local runeId = settingNumber("trapRuneId", 3180, 1, 99999)
+  if useWith then
+    local ok = pcall(function() useWith(runeId, topThing) end)
+    if ok then return true end
+  end
+
+  if g_game and g_game.useInventoryItemWith then
+    local ok = pcall(function() g_game.useInventoryItemWith(runeId, topThing) end)
+    if ok then return true end
+  end
+
+  return false
+end
+
+local function buildTrapTiles(targetPos, localPos, callerPos)
+  local open = {}
+  markOpenTrapLine(open, targetPos, localPos, 2)
+  markOpenTrapLine(open, targetPos, callerPos, 2)
+
+  local sourceStepX, sourceStepY = getDirectionStepFromSource(targetPos, localPos)
+  if sourceStepX == 0 and sourceStepY == 0 then
+    sourceStepX, sourceStepY = getDirectionStepFromSource(targetPos, callerPos)
+  end
+
+  local seedName = getLocalPlayerNameSafe()
+  local candidates = {}
+
+  for _, radius in ipairs({2, 1}) do
+    for offsetX = -radius, radius do
+      for offsetY = -radius, radius do
+        if math.max(math.abs(offsetX), math.abs(offsetY)) == radius then
+          local tilePos = {x = targetPos.x + offsetX, y = targetPos.y + offsetY, z = targetPos.z}
+          local key = positionKey(tilePos)
+          if not open[key] and not samePosition(tilePos, localPos) and not samePosition(tilePos, callerPos) then
+            table.insert(candidates, {
+              pos = tilePos,
+              radius = radius,
+              dot = (offsetX * sourceStepX) + (offsetY * sourceStepY),
+              tie = hashText(seedName .. "|" .. tostring(radius) .. "|" .. tostring(offsetX) .. "|" .. tostring(offsetY))
+            })
+          end
+        end
+      end
+    end
+  end
+
+  table.sort(candidates, function(a, b)
+    if a.radius ~= b.radius then return a.radius > b.radius end
+    if a.dot ~= b.dot then return a.dot < b.dot end
+    if a.tie ~= b.tie then return a.tie < b.tie end
+    return positionKey(a.pos) < positionKey(b.pos)
+  end)
+
+  local tiles = {}
+  for _, candidate in ipairs(candidates) do
+    table.insert(tiles, candidate.pos)
+  end
+
+  return tiles
+end
+
+local function tryTrapTile(tilePos, wallIds)
+  local tile = getTileSafe(tilePos)
+  if not tile then return false end
+  if not tileCanShootSafe(tile) then return false end
+  if tileHasCreatureSafe(tile) then return false end
+  if tileHasTrapWall(tile, wallIds) then return false end
+  return useTrapRuneOnTile(tile)
+end
+
+local function executeTrapTarget(callerName)
+  if settings.trapEnabled ~= true then return false end
+
+  local tm = timeMs()
+  local cooldown = settingNumber("trapCooldownMs", 1500, 300, 10000)
+  if tm < toNumber(trapState.lastTrapAt, 0) + cooldown then return false end
+
+  local target = getComboTargetCreature()
+  local targetPos = safeCreaturePosition(target)
+  local localPos = getLocalPlayerPositionSafe()
+  if not target or not targetPos or not localPos or targetPos.z ~= localPos.z then return false end
+
+  local callerCreature = getBattlePlayerByName(callerName)
+  local callerPos = safeCreaturePosition(callerCreature)
+  if callerPos and callerPos.z ~= targetPos.z then callerPos = nil end
+
+  local tiles = buildTrapTiles(targetPos, localPos, callerPos)
+  if #tiles == 0 then return false end
+
+  trapState.lastTrapAt = tm
+  local wallIds = parseTrapWallIds()
+  local stepMs = settingNumber("trapStepMs", 180, 50, 1000)
+  local maxTiles = math.floor(settingNumber("trapMaxTiles", 24, 1, 24))
+  local startDelay = (hashText(getLocalPlayerNameSafe()) % 4) * 70
+
+  for index, tilePos in ipairs(tiles) do
+    if index > maxTiles then break end
+    local posToTrap = tilePos
+    local delayMs = startDelay + ((index - 1) * stepMs)
+    if schedule then
+      schedule(delayMs, function()
+        tryTrapTile(posToTrap, wallIds)
+      end)
+    else
+      tryTrapTile(posToTrap, wallIds)
+    end
+  end
+
+  return true
 end
 
 local function attackComboCreature(callerName, creature, fallbackName)
@@ -655,6 +1242,7 @@ local function attackComboCreature(callerName, creature, fallbackName)
   targetLock.caller = callerName
   targetLock.rank = rank
   targetLock.untilMs = tm + settingNumber("targetLockMs", 1600, 300, 5000)
+  rememberComboTarget(creature, targetName)
 
   if creature and g_game and g_game.attack then
     pcall(function() g_game.attack(creature) end)
@@ -662,12 +1250,6 @@ local function attackComboCreature(callerName, creature, fallbackName)
   end
 
   return false
-end
-
-local function attackComboTarget(callerName, targetName)
-  targetName = trimText(targetName)
-  if targetName == "" then return false end
-  return attackComboCreature(callerName, getCreatureByNameSafe(targetName), targetName)
 end
 
 local function attackComboTargetId(callerName, targetId)
@@ -683,13 +1265,17 @@ local function parseComboChat(payload)
   local lower = payload:lower()
   if lower == "combo" then return "combo", "" end
   if lower:sub(1, 6) == "combo " then return "none", "" end
+  if lower == "trap" then return "trap", "" end
+  if lower:sub(1, 5) == "trap " then return "none", "" end
   if lower:sub(1, 2) == "t " then
-    local targetId = toNumber(trimText(payload:sub(3)))
+    local rawTargetId = trimText(payload:sub(3))
+    if not rawTargetId:match("^%d+$") then return "none", "" end
+    local targetId = toNumber(rawTargetId)
     if targetId then return "targetId", targetId end
     return "none", ""
   end
 
-  return "target", payload
+  return "none", ""
 end
 
 local ui = setupUI([[
@@ -703,7 +1289,7 @@ Panel
     text-align: center
     width: 142
     height: 20
-    !text: tr('Combo Chat')
+    !text: tr('SMART PVP')
 
   Button
     id: setup
@@ -792,7 +1378,7 @@ ComboCallerListBlock < Panel
 
 ComboChatWindow < MainWindow
   text: Combo Chat
-  size: 360 650
+  size: 360 740
   @onEscape: self:hide()
 
   Label
@@ -843,7 +1429,7 @@ ComboChatWindow < MainWindow
     anchors.left: parent.left
     anchors.right: parent.right
     margin-top: 8
-    height: 385
+    height: 480
 
     BotSwitch
       id: comboChat
@@ -864,9 +1450,85 @@ ComboChatWindow < MainWindow
       text-align: center
       text: HIERARQUIA
 
+    BotSwitch
+      id: autoVocation
+      anchors.top: comboChat.bottom
+      anchors.left: parent.left
+      margin-top: 7
+      width: 102
+      height: 18
+      text-align: center
+      text: AUTO VOC
+
+    Button
+      id: presetVocation
+      anchors.top: autoVocation.top
+      anchors.left: autoVocation.right
+      anchors.right: parent.right
+      margin-left: 5
+      height: 18
+      text: VOC
+
+    Label
+      id: detectedVocation
+      anchors.top: autoVocation.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      margin-top: 7
+      height: 18
+      text-align: center
+      color: #ffd36b
+      text: Detectada: -
+
+    BotSwitch
+      id: presetUseA
+      anchors.top: detectedVocation.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      margin-top: 7
+      height: 18
+      text-align: center
+      text: USAR A
+
+    Button
+      id: presetBChoice1
+      anchors.top: presetUseA.bottom
+      anchors.left: parent.left
+      margin-top: 7
+      width: 164
+      height: 18
+      text: B1
+
+    Button
+      id: presetBChoice2
+      anchors.top: presetBChoice1.top
+      anchors.left: presetBChoice1.right
+      anchors.right: parent.right
+      margin-left: 5
+      height: 18
+      text: B2
+
+    Button
+      id: presetCChoice1
+      anchors.top: presetBChoice1.bottom
+      anchors.left: parent.left
+      margin-top: 7
+      width: 164
+      height: 18
+      text: C1
+
+    Button
+      id: presetCChoice2
+      anchors.top: presetCChoice1.top
+      anchors.left: presetCChoice1.right
+      anchors.right: parent.right
+      margin-left: 5
+      height: 18
+      text: C2
+
     Label
       id: chatLabel
-      anchors.top: comboChat.bottom
+      anchors.top: presetCChoice1.bottom
       anchors.left: parent.left
       margin-top: 7
       width: 42
@@ -884,84 +1546,8 @@ ComboChatWindow < MainWindow
       text-align: center
 
     Label
-      id: spellLabel
-      anchors.top: chatLabel.bottom
-      anchors.left: parent.left
-      margin-top: 7
-      width: 58
-      height: 18
-      text-offset: 0 3
-      text: Magia:
-
-    TextEdit
-      id: comboSpell
-      anchors.top: spellLabel.top
-      anchors.left: spellLabel.right
-      anchors.right: parent.right
-      margin-left: 5
-      height: 18
-      text-align: center
-
-    Label
-      id: spellLabel2
-      anchors.top: spellLabel.bottom
-      anchors.left: parent.left
-      margin-top: 7
-      width: 58
-      height: 18
-      text-offset: 0 3
-      text: Magia 2:
-
-    TextEdit
-      id: comboSpell2
-      anchors.top: spellLabel2.top
-      anchors.left: spellLabel2.right
-      anchors.right: parent.right
-      margin-left: 5
-      height: 18
-      text-align: center
-
-    Label
-      id: spellLabel3
-      anchors.top: spellLabel2.bottom
-      anchors.left: parent.left
-      margin-top: 7
-      width: 58
-      height: 18
-      text-offset: 0 3
-      text: Magia 3:
-
-    TextEdit
-      id: comboSpell3
-      anchors.top: spellLabel3.top
-      anchors.left: spellLabel3.right
-      anchors.right: parent.right
-      margin-left: 5
-      height: 18
-      text-align: center
-
-    Label
-      id: spellLabel4
-      anchors.top: spellLabel3.bottom
-      anchors.left: parent.left
-      margin-top: 7
-      width: 58
-      height: 18
-      text-offset: 0 3
-      text: Magia 4:
-
-    TextEdit
-      id: comboSpell4
-      anchors.top: spellLabel4.top
-      anchors.left: spellLabel4.right
-      anchors.right: parent.right
-      margin-left: 5
-      height: 18
-      text-align: center
-
-    Label
       id: delayLabel
-      anchors.top: spellLabel4.bottom
+      anchors.top: chatLabel.bottom
       anchors.left: parent.left
       margin-top: 7
       width: 58
@@ -998,168 +1584,120 @@ ComboChatWindow < MainWindow
       text-align: center
       text: SMART ROTATION
 
-    Label
-      id: autoALabel
+    BotSwitch
+      id: smartStatusHud
       anchors.top: smartRotation.bottom
       anchors.left: parent.left
-      margin-top: 7
-      width: 58
-      height: 18
-      text-offset: 0 3
-      text: Auto A:
-
-    TextEdit
-      id: autoSpellA
-      anchors.top: autoALabel.top
-      anchors.left: autoALabel.right
       anchors.right: parent.right
-      margin-left: 5
+      margin-top: 7
       height: 18
       text-align: center
+      text: STATUS HUD
 
-    Label
-      id: autoBLabel
-      anchors.top: autoALabel.bottom
+    BotSwitch
+      id: trapEnabled
+      anchors.top: smartStatusHud.bottom
       anchors.left: parent.left
-      margin-top: 7
-      width: 58
-      height: 18
-      text-offset: 0 3
-      text: Auto B:
-
-    TextEdit
-      id: autoSpellB
-      anchors.top: autoBLabel.top
-      anchors.left: autoBLabel.right
       anchors.right: parent.right
-      margin-left: 5
+      margin-top: 7
       height: 18
       text-align: center
+      text: TRAP TARGET
 
     Label
-      id: autoACdLabel
-      anchors.top: autoBLabel.bottom
+      id: trapRuneLabel
+      anchors.top: trapEnabled.bottom
       anchors.left: parent.left
       margin-top: 7
       width: 42
       height: 18
       text-offset: 0 3
-      text: CD A:
+      text: MW:
 
     TextEdit
-      id: autoSpellACooldownMs
-      anchors.top: autoACdLabel.top
-      anchors.left: autoACdLabel.right
+      id: trapRuneId
+      anchors.top: trapRuneLabel.top
+      anchors.left: trapRuneLabel.right
       margin-left: 5
       width: 78
       height: 18
       text-align: center
 
     Label
-      id: autoBCdLabel
-      anchors.top: autoACdLabel.top
-      anchors.left: autoSpellACooldownMs.right
+      id: trapStepLabel
+      anchors.top: trapRuneLabel.top
+      anchors.left: trapRuneId.right
       margin-left: 8
       width: 42
       height: 18
       text-offset: 0 3
-      text: CD B:
+      text: Delay:
 
     TextEdit
-      id: autoSpellBCooldownMs
-      anchors.top: autoBCdLabel.top
-      anchors.left: autoBCdLabel.right
+      id: trapStepMs
+      anchors.top: trapStepLabel.top
+      anchors.left: trapStepLabel.right
       anchors.right: parent.right
       margin-left: 5
       height: 18
       text-align: center
 
     Label
-      id: comboCCdLabel
-      anchors.top: autoACdLabel.bottom
+      id: trapCooldownLabel
+      anchors.top: trapRuneLabel.bottom
       anchors.left: parent.left
       margin-top: 7
       width: 42
       height: 18
       text-offset: 0 3
-      text: CD C:
+      text: CD:
 
     TextEdit
-      id: comboSpellCCooldownMs
-      anchors.top: comboCCdLabel.top
-      anchors.left: comboCCdLabel.right
+      id: trapCooldownMs
+      anchors.top: trapCooldownLabel.top
+      anchors.left: trapCooldownLabel.right
       margin-left: 5
       width: 78
       height: 18
       text-align: center
 
     Label
-      id: comboCSlotLabel
-      anchors.top: comboCCdLabel.top
-      anchors.left: comboSpellCCooldownMs.right
+      id: trapMaxTilesLabel
+      anchors.top: trapCooldownLabel.top
+      anchors.left: trapCooldownMs.right
       margin-left: 8
       width: 42
       height: 18
       text-offset: 0 3
-      text: Slot:
+      text: Tiles:
 
     TextEdit
-      id: comboSpellCSlot
-      anchors.top: comboCSlotLabel.top
-      anchors.left: comboCSlotLabel.right
+      id: trapMaxTiles
+      anchors.top: trapMaxTilesLabel.top
+      anchors.left: trapMaxTilesLabel.right
       anchors.right: parent.right
       margin-left: 5
       height: 18
       text-align: center
 
     Label
-      id: smartMarginLabel
-      anchors.top: comboCCdLabel.bottom
+      id: trapWallIdsLabel
+      anchors.top: trapCooldownLabel.bottom
       anchors.left: parent.left
       margin-top: 7
       width: 58
       height: 18
       text-offset: 0 3
-      text: Margem:
+      text: Wall IDs:
 
     TextEdit
-      id: smartSafetyMarginMs
-      anchors.top: smartMarginLabel.top
-      anchors.left: smartMarginLabel.right
-      margin-left: 5
-      width: 62
-      height: 18
-      text-align: center
-
-    Label
-      id: autoIntervalLabel
-      anchors.top: smartMarginLabel.top
-      anchors.left: smartSafetyMarginMs.right
-      margin-left: 8
-      width: 48
-      height: 18
-      text-offset: 0 3
-      text: Interv:
-
-    TextEdit
-      id: autoRotationIntervalMs
-      anchors.top: autoIntervalLabel.top
-      anchors.left: autoIntervalLabel.right
+      id: trapWallIdsText
+      anchors.top: trapWallIdsLabel.top
+      anchors.left: trapWallIdsLabel.right
       anchors.right: parent.right
       margin-left: 5
       height: 18
       text-align: center
-
-    Label
-      id: smartStatus
-      anchors.top: smartMarginLabel.bottom
-      anchors.left: parent.left
-      anchors.right: parent.right
-      margin-top: 7
-      height: 18
-      text-align: center
-      color: #57c785
-      text: PRESSAO
 
   HorizontalSeparator
     anchors.right: parent.right
@@ -1183,6 +1721,225 @@ local function setLabelText(widget, text, color)
   if widget and widget.setColor and color then widget:setColor(color) end
 end
 
+local function smartStatusColor(status)
+  if status == "AGUARDANDO CALLER COMBO" then return "#ffd36b" end
+  if status == "COMBO EXECUTANDO" then return "#6bb7ff" end
+  if status == "CONFIRMANDO" then return "#ffb86b" end
+  if status == "PRESSAO" then return "#c7c7c7" end
+  if status == "OFF" then return "#ff6b6b" end
+  return "#57c785"
+end
+
+local function getSmartRotationDisplayStatus()
+  if settings.smartRotationEnabled ~= true then return "OFF" end
+  return getSmartRotationStatus()
+end
+
+local function getGameRootPanelSafe()
+  if modules and modules.game_interface and modules.game_interface.getRootPanel then
+    local ok, root = pcall(function() return modules.game_interface.getRootPanel() end)
+    if ok and root then return root end
+  end
+  if rootWidget then return rootWidget end
+  if g_ui and g_ui.getRootWidget then
+    local ok, root = pcall(function() return g_ui.getRootWidget() end)
+    if ok then return root end
+  end
+  return nil
+end
+
+local function ctrlPressed()
+  if modules and modules.corelib and modules.corelib.g_keyboard and modules.corelib.g_keyboard.isCtrlPressed then
+    local ok, pressed = pcall(function() return modules.corelib.g_keyboard.isCtrlPressed() end)
+    if ok then return pressed == true end
+  end
+  if modules and modules.corelib and modules.corelib.g_keyboard and modules.corelib.g_keyboard.isKeyPressed then
+    local ok, pressed = pcall(function()
+      return modules.corelib.g_keyboard.isKeyPressed("Ctrl") or modules.corelib.g_keyboard.isKeyPressed("Control")
+    end)
+    if ok then return pressed == true end
+  end
+  if g_keyboard and g_keyboard.isCtrlPressed then
+    local ok, pressed = pcall(function() return g_keyboard.isCtrlPressed() end)
+    if ok then return pressed == true end
+  end
+  if g_keyboard and g_keyboard.isKeyPressed then
+    local ok, pressed = pcall(function()
+      return g_keyboard.isKeyPressed("Ctrl") or g_keyboard.isKeyPressed("Control")
+    end)
+    if ok then return pressed == true end
+  end
+  return false
+end
+
+local smartStatusHud = nil
+local refreshSmartStatusHud = nil
+
+local function findSmartStatusHudWidget(root)
+  if not root then return nil end
+
+  if root.recursiveGetChildById then
+    local ok, widget = pcall(function() return root:recursiveGetChildById("smartPvpStatusHud") end)
+    if ok and widget then return widget end
+  end
+
+  if root.getChildById then
+    local ok, widget = pcall(function() return root:getChildById("smartPvpStatusHud") end)
+    if ok and widget then return widget end
+  end
+
+  return nil
+end
+
+local function destroyOldSmartStatusHuds(root)
+  if not root then return end
+
+  for _ = 1, 20 do
+    local oldHud = findSmartStatusHudWidget(root)
+    if not oldHud then return end
+    pcall(function() oldHud:destroy() end)
+  end
+end
+
+local function createSmartStatusHud()
+  if smartStatusHud then return smartStatusHud end
+  if not setupUI then return nil end
+
+  local root = getGameRootPanelSafe()
+  if not root then return nil end
+  destroyOldSmartStatusHuds(root)
+
+  local ok, hud = pcall(function()
+    return setupUI([[
+Panel
+  id: smartPvpStatusHud
+  width: 178
+  height: 42
+  padding: 2
+  background-color: #00000088
+  opacity: 0.95
+  focusable: true
+  phantom: false
+  draggable: true
+
+  Label
+    id: title
+    anchors.top: parent.top
+    anchors.left: parent.left
+    anchors.right: parent.right
+    height: 14
+    text-align: center
+    color: #57c785
+    font: verdana-11px-rounded
+    text: SMART PVP
+    phantom: true
+
+  Label
+    id: status
+    anchors.top: title.bottom
+    anchors.left: parent.left
+    anchors.right: parent.right
+    margin-top: 2
+    height: 22
+    text-align: center
+    color: #c7c7c7
+    font: verdana-11px-bold
+    text: PRESSAO
+    phantom: true
+]], root)
+  end)
+
+  if not ok or not hud then return nil end
+
+  local savedPos = settings.smartStatusHudPos
+  if type(savedPos) == "table" and savedPos.x and savedPos.y and hud.setPosition then
+    hud:setPosition({x = savedPos.x, y = savedPos.y})
+  elseif hud.setPosition then
+    hud:setPosition({x = 315, y = 220})
+  end
+
+  if hud.setTooltip then
+    hud:setTooltip("Ctrl + arrastar para mover. Use STATUS HUD no setup para esconder.")
+  end
+
+  local moving = false
+  local moveStart = nil
+
+  hud.onDragEnter = function(widget, mousePos)
+    if not ctrlPressed() then return false end
+    if widget.breakAnchors then widget:breakAnchors() end
+    widget.movingReference = {x = mousePos.x - widget:getX(), y = mousePos.y - widget:getY()}
+    return true
+  end
+
+  hud.onDragMove = function(widget, mousePos, moved)
+    if not widget.movingReference then return false end
+    local parent = widget:getParent()
+    if parent and parent.getRect and widget.getWidth and widget.getHeight then
+      local rect = parent:getRect()
+      local x = math.min(math.max(rect.x, mousePos.x - widget.movingReference.x), rect.x + rect.width - widget:getWidth())
+      local y = math.min(math.max(rect.y, mousePos.y - widget.movingReference.y), rect.y + rect.height - widget:getHeight())
+      widget:move(x, y)
+    else
+      widget:setPosition({x = mousePos.x - widget.movingReference.x, y = mousePos.y - widget.movingReference.y})
+    end
+    return true
+  end
+
+  hud.onDragLeave = function(widget, pos)
+    widget.movingReference = nil
+    settings.smartStatusHudPos = widget:getPosition()
+    return true
+  end
+
+  hud.onMousePress = function(widget, pos, button)
+    if button == MouseLeftButton and ctrlPressed() then
+      moving = true
+      moveStart = pos
+      return true
+    end
+    return false
+  end
+
+  hud.onMouseMove = function(widget, pos, button)
+    if not moving or not moveStart then return false end
+    local dx = pos.x - moveStart.x
+    local dy = pos.y - moveStart.y
+    local current = widget:getPosition()
+    widget:setPosition({x = current.x + dx, y = current.y + dy})
+    moveStart = pos
+    return true
+  end
+
+  hud.onMouseRelease = function(widget, pos, button)
+    if button == MouseLeftButton and moving then
+      moving = false
+      settings.smartStatusHudPos = widget:getPosition()
+      return true
+    end
+    return false
+  end
+
+  smartStatusHud = hud
+  return smartStatusHud
+end
+
+refreshSmartStatusHud = function()
+  local hud = createSmartStatusHud()
+  if not hud then return end
+
+  if settings.enabled ~= true or settings.smartStatusHudEnabled ~= true then
+    if hud.hide then hud:hide() end
+    return
+  end
+
+  if hud.show then hud:show() end
+  local status = getSmartRotationDisplayStatus()
+  local color = smartStatusColor(status)
+  setLabelText(hud.status, status, color)
+  setLabelText(hud.title, "SMART PVP", settings.smartRotationEnabled == true and "#57c785" or "#ff6b6b")
+end
+
 local function refreshStatus()
   if not comboWindow or not comboWindow.status then return end
   local callers = getCallers()
@@ -1196,17 +1953,10 @@ local function refreshStatus()
   setLabelText(comboWindow.status, active, #callers > 0 and "#57c785" or "#ff6b6b")
 
   if comboWindow.chatPanel and comboWindow.chatPanel.smartStatus then
-    local smartStatus = getSmartRotationStatus()
-    local color = "#57c785"
-    if smartStatus == "AGUARDANDO CALLER COMBO" then
-      color = "#ffd36b"
-    elseif smartStatus == "COMBO EXECUTANDO" then
-      color = "#6bb7ff"
-    elseif smartStatus == "PRESSAO" then
-      color = "#c7c7c7"
-    end
-    setLabelText(comboWindow.chatPanel.smartStatus, smartStatus, color)
+    local smartStatus = getSmartRotationDisplayStatus()
+    setLabelText(comboWindow.chatPanel.smartStatus, smartStatus, smartStatusColor(smartStatus))
   end
+  if refreshSmartStatusHud then refreshSmartStatusHud() end
 end
 
 local function bindSwitch(widget, key)
@@ -1298,26 +2048,181 @@ local function addCallerFromInput()
   refreshStatus()
 end
 
-local function syncComboWindow()
+local refreshPresetPanel = nil
+local syncComboWindow = nil
+
+local function formatCooldownLabel(ms)
+  ms = toNumber(ms, 0)
+  if ms <= 0 then return "" end
+  return " (" .. tostring(math.floor(ms / 1000)) .. "s)"
+end
+
+local function presetSpellLabel(groupKey, fallback)
+  local spell = getSelectedPresetSpell(groupKey)
+  if not spell then return fallback or "-" end
+  return tostring(spell.label or spell.spell or fallback or "-") .. formatCooldownLabel(spell.cd)
+end
+
+local function presetOptionButtonText(groupKey, index, prefix)
+  local config = getVocationPresetConfig()
+  local options = config and config[groupKey] or nil
+  local option = options and options[index] or nil
+  if not option then return prefix .. ": -" end
+
+  local selected = getPresetChoiceIndex(groupKey, options)
+  local mark = selected == index and "[X] " or "[ ] "
+  return mark .. prefix .. ": " .. tostring(option.label or option.spell or "-")
+end
+
+refreshPresetPanel = function()
+  if not comboWindow or not comboWindow.chatPanel then return end
+  local panel = comboWindow.chatPanel
+  local config, vocation = getVocationPresetConfig()
+
+  if panel.autoVocation and panel.autoVocation.setOn then
+    panel.autoVocation:setOn(settings.autoSelectVocationFromServer == true)
+  end
+  if panel.presetUseA and panel.presetUseA.setOn then
+    panel.presetUseA:setOn(settings.presetUseA == true)
+    if panel.presetUseA.setText then
+      panel.presetUseA:setText(config and config.a and "USAR A" or "A VAZIO")
+    end
+  end
+  if panel.presetVocation and panel.presetVocation.setText then
+    panel.presetVocation:setText("VOC: " .. formatPresetVocationLabel(vocation))
+  end
+  if panel.detectedVocation and panel.detectedVocation.setText then
+    local detected = normalizeVocationName(settings.detectedVocation)
+    local label = detected ~= "" and formatPresetVocationLabel(detected) or "-"
+    panel.detectedVocation:setText("Detectada: " .. label)
+  end
+  if panel.presetBChoice1 and panel.presetBChoice1.setText then
+    panel.presetBChoice1:setText(presetOptionButtonText("b", 1, "B1"))
+  end
+  if panel.presetBChoice2 and panel.presetBChoice2.setText then
+    panel.presetBChoice2:setText(presetOptionButtonText("b", 2, "B2"))
+  end
+  if panel.presetCChoice1 and panel.presetCChoice1.setText then
+    panel.presetCChoice1:setText(presetOptionButtonText("c", 1, "C1"))
+  end
+  if panel.presetCChoice2 and panel.presetCChoice2.setText then
+    panel.presetCChoice2:setText(presetOptionButtonText("c", 2, "C2"))
+  end
+end
+
+local function cyclePresetVocation()
+  local current = getPresetVocation()
+  local nextIndex = 1
+  if current ~= "" then
+    for index, vocation in ipairs(presetVocationOrder) do
+      if vocation == current then
+        nextIndex = index + 1
+        break
+      end
+    end
+  end
+  if nextIndex > #presetVocationOrder then nextIndex = 1 end
+  settings.presetVocation = presetVocationOrder[nextIndex]
+  settings.presetBChoice = 1
+  settings.presetCChoice = 1
+  refreshPresetPanel()
+end
+
+local function cyclePresetChoice(groupKey)
+  local config = getVocationPresetConfig()
+  if not config then return end
+  local options = config[groupKey]
+  local total = type(options) == "table" and #options or 0
+  if total <= 1 then
+    refreshPresetPanel()
+    return
+  end
+
+  local key = groupKey == "c" and "presetCChoice" or "presetBChoice"
+  local index = getPresetChoiceIndex(groupKey, options) + 1
+  if index > total then index = 1 end
+  settings[key] = index
+  refreshPresetPanel()
+end
+
+local function applyVocationPreset()
+  local config = getVocationPresetConfig()
+  if not config then return false end
+
+  local spellA = config.a
+  local spellB = getSelectedPresetSpell("b")
+  local spellC = getSelectedPresetSpell("c")
+  local comboSpells = {}
+
+  if spellA and settings.presetUseA == true then
+    table.insert(comboSpells, spellA.spell)
+  end
+  if spellB then table.insert(comboSpells, spellB.spell) end
+  local cSlot = #comboSpells + 1
+  if spellC then table.insert(comboSpells, spellC.spell) end
+
+  settings.comboSpell = comboSpells[1] or ""
+  settings.comboSpell2 = comboSpells[2] or ""
+  settings.comboSpell3 = comboSpells[3] or ""
+  settings.comboSpell4 = comboSpells[4] or ""
+
+  settings.autoSpellA = (spellA and settings.presetUseA == true) and spellA.spell or ""
+  settings.autoSpellACooldownMs = spellA and spellA.cd or 2000
+  settings.autoSpellB = spellB and spellB.spell or ""
+  settings.autoSpellBCooldownMs = spellB and spellB.cd or 5000
+  settings.comboSpellCCooldownMs = spellC and spellC.cd or 12000
+  settings.comboSpellCSlot = spellC and cSlot or 3
+
+  return true
+end
+
+local function selectPresetChoiceAndApply(groupKey, index)
+  local config = getVocationPresetConfig()
+  if not config then
+    refreshPresetPanel()
+    return
+  end
+
+  local options = config[groupKey]
+  if type(options) ~= "table" or not options[index] then
+    refreshPresetPanel()
+    return
+  end
+
+  local key = groupKey == "c" and "presetCChoice" or "presetBChoice"
+  settings[key] = index
+  applyVocationPreset()
+  syncComboWindow()
+end
+
+syncComboWindow = function()
   refreshCallerList()
   comboWindow.chatPanel.comboChat:setOn(settings.comboChatEnabled == true)
   comboWindow.chatPanel.hierarchy:setOn(settings.hierarchyEnabled == true)
   comboWindow.chatPanel.autoOpenChat:setOn(settings.autoOpenChat == true)
   comboWindow.chatPanel.smartRotation:setOn(settings.smartRotationEnabled == true)
+  comboWindow.chatPanel.smartStatusHud:setOn(settings.smartStatusHudEnabled == true)
+  comboWindow.chatPanel.trapEnabled:setOn(settings.trapEnabled == true)
   comboWindow.chatPanel.chatName:setText(tostring(settings.chatName or "Guild"))
-  comboWindow.chatPanel.comboSpell:setText(tostring(settings.comboSpell or ""))
-  comboWindow.chatPanel.comboSpell2:setText(tostring(settings.comboSpell2 or ""))
-  comboWindow.chatPanel.comboSpell3:setText(tostring(settings.comboSpell3 or ""))
-  comboWindow.chatPanel.comboSpell4:setText(tostring(settings.comboSpell4 or ""))
+  if comboWindow.chatPanel.comboSpell then comboWindow.chatPanel.comboSpell:setText(tostring(settings.comboSpell or "")) end
+  if comboWindow.chatPanel.comboSpell2 then comboWindow.chatPanel.comboSpell2:setText(tostring(settings.comboSpell2 or "")) end
+  if comboWindow.chatPanel.comboSpell3 then comboWindow.chatPanel.comboSpell3:setText(tostring(settings.comboSpell3 or "")) end
+  if comboWindow.chatPanel.comboSpell4 then comboWindow.chatPanel.comboSpell4:setText(tostring(settings.comboSpell4 or "")) end
   comboWindow.chatPanel.comboSpellStepMs:setText(tostring(settingNumber("comboSpellStepMs", 500, 300, 3000)))
-  comboWindow.chatPanel.autoSpellA:setText(tostring(settings.autoSpellA or ""))
-  comboWindow.chatPanel.autoSpellB:setText(tostring(settings.autoSpellB or ""))
-  comboWindow.chatPanel.autoSpellACooldownMs:setText(tostring(settingNumber("autoSpellACooldownMs", 2000, 500, 60000)))
-  comboWindow.chatPanel.autoSpellBCooldownMs:setText(tostring(settingNumber("autoSpellBCooldownMs", 5000, 500, 60000)))
-  comboWindow.chatPanel.comboSpellCCooldownMs:setText(tostring(settingNumber("comboSpellCCooldownMs", 12000, 1000, 60000)))
-  comboWindow.chatPanel.comboSpellCSlot:setText(tostring(settingNumber("comboSpellCSlot", 3, 1, 4)))
-  comboWindow.chatPanel.smartSafetyMarginMs:setText(tostring(settingNumber("smartSafetyMarginMs", 1000, 0, 10000)))
-  comboWindow.chatPanel.autoRotationIntervalMs:setText(tostring(settingNumber("autoRotationIntervalMs", 200, 50, 3000)))
+  if comboWindow.chatPanel.autoSpellA then comboWindow.chatPanel.autoSpellA:setText(tostring(settings.autoSpellA or "")) end
+  if comboWindow.chatPanel.autoSpellB then comboWindow.chatPanel.autoSpellB:setText(tostring(settings.autoSpellB or "")) end
+  if comboWindow.chatPanel.autoSpellACooldownMs then comboWindow.chatPanel.autoSpellACooldownMs:setText(tostring(settingNumber("autoSpellACooldownMs", 2000, 500, 60000))) end
+  if comboWindow.chatPanel.autoSpellBCooldownMs then comboWindow.chatPanel.autoSpellBCooldownMs:setText(tostring(settingNumber("autoSpellBCooldownMs", 5000, 500, 60000))) end
+  if comboWindow.chatPanel.comboSpellCCooldownMs then comboWindow.chatPanel.comboSpellCCooldownMs:setText(tostring(settingNumber("comboSpellCCooldownMs", 12000, 1000, 60000))) end
+  if comboWindow.chatPanel.comboSpellCSlot then comboWindow.chatPanel.comboSpellCSlot:setText(tostring(settingNumber("comboSpellCSlot", 3, 1, 4))) end
+  if comboWindow.chatPanel.smartSafetyMarginMs then comboWindow.chatPanel.smartSafetyMarginMs:setText(tostring(settingNumber("smartSafetyMarginMs", 1000, 0, 10000))) end
+  if comboWindow.chatPanel.autoRotationIntervalMs then comboWindow.chatPanel.autoRotationIntervalMs:setText(tostring(settingNumber("autoRotationIntervalMs", 200, 50, 3000))) end
+  comboWindow.chatPanel.trapRuneId:setText(tostring(settingNumber("trapRuneId", 3180, 1, 99999)))
+  comboWindow.chatPanel.trapStepMs:setText(tostring(settingNumber("trapStepMs", 180, 50, 1000)))
+  comboWindow.chatPanel.trapCooldownMs:setText(tostring(settingNumber("trapCooldownMs", 1500, 300, 10000)))
+  comboWindow.chatPanel.trapMaxTiles:setText(tostring(settingNumber("trapMaxTiles", 24, 1, 24)))
+  comboWindow.chatPanel.trapWallIdsText:setText(tostring(settings.trapWallIdsText or "2128, 2129, 2130"))
+  refreshPresetPanel()
   refreshStatus()
 end
 
@@ -1326,6 +2231,32 @@ bindSwitch(comboWindow.chatPanel.comboChat, "comboChatEnabled")
 bindSwitch(comboWindow.chatPanel.hierarchy, "hierarchyEnabled")
 bindSwitch(comboWindow.chatPanel.autoOpenChat, "autoOpenChat")
 bindSwitch(comboWindow.chatPanel.smartRotation, "smartRotationEnabled")
+bindSwitch(comboWindow.chatPanel.smartStatusHud, "smartStatusHudEnabled")
+bindSwitch(comboWindow.chatPanel.trapEnabled, "trapEnabled")
+
+comboWindow.chatPanel.autoVocation.onClick = function(w)
+  settings.autoSelectVocationFromServer = not settings.autoSelectVocationFromServer
+  w:setOn(settings.autoSelectVocationFromServer == true)
+  applyVocationPreset()
+  syncComboWindow()
+end
+
+comboWindow.chatPanel.presetUseA.onClick = function(w)
+  settings.presetUseA = not settings.presetUseA
+  w:setOn(settings.presetUseA == true)
+  applyVocationPreset()
+  syncComboWindow()
+end
+
+comboWindow.chatPanel.presetVocation.onClick = function()
+  cyclePresetVocation()
+  applyVocationPreset()
+  syncComboWindow()
+end
+comboWindow.chatPanel.presetBChoice1.onClick = function() selectPresetChoiceAndApply("b", 1) end
+comboWindow.chatPanel.presetBChoice2.onClick = function() selectPresetChoiceAndApply("b", 2) end
+comboWindow.chatPanel.presetCChoice1.onClick = function() selectPresetChoiceAndApply("c", 1) end
+comboWindow.chatPanel.presetCChoice2.onClick = function() selectPresetChoiceAndApply("c", 2) end
 
 comboWindow.callersPanel.callersBlock.addBtn.onClick = addCallerFromInput
 comboWindow.callersPanel.callersBlock.nameEdit.onKeyPress = function(_, keyCode)
@@ -1343,24 +2274,32 @@ comboWindow.chatPanel.chatName.onTextChange = function(_, text)
   refreshStatus()
 end
 
-comboWindow.chatPanel.comboSpell:setText(tostring(settings.comboSpell or ""))
-comboWindow.chatPanel.comboSpell.onTextChange = function(_, text)
-  settings.comboSpell = trimText(text)
+if comboWindow.chatPanel.comboSpell then
+  comboWindow.chatPanel.comboSpell:setText(tostring(settings.comboSpell or ""))
+  comboWindow.chatPanel.comboSpell.onTextChange = function(_, text)
+    settings.comboSpell = trimText(text)
+  end
 end
 
-comboWindow.chatPanel.comboSpell2:setText(tostring(settings.comboSpell2 or ""))
-comboWindow.chatPanel.comboSpell2.onTextChange = function(_, text)
-  settings.comboSpell2 = trimText(text)
+if comboWindow.chatPanel.comboSpell2 then
+  comboWindow.chatPanel.comboSpell2:setText(tostring(settings.comboSpell2 or ""))
+  comboWindow.chatPanel.comboSpell2.onTextChange = function(_, text)
+    settings.comboSpell2 = trimText(text)
+  end
 end
 
-comboWindow.chatPanel.comboSpell3:setText(tostring(settings.comboSpell3 or ""))
-comboWindow.chatPanel.comboSpell3.onTextChange = function(_, text)
-  settings.comboSpell3 = trimText(text)
+if comboWindow.chatPanel.comboSpell3 then
+  comboWindow.chatPanel.comboSpell3:setText(tostring(settings.comboSpell3 or ""))
+  comboWindow.chatPanel.comboSpell3.onTextChange = function(_, text)
+    settings.comboSpell3 = trimText(text)
+  end
 end
 
-comboWindow.chatPanel.comboSpell4:setText(tostring(settings.comboSpell4 or ""))
-comboWindow.chatPanel.comboSpell4.onTextChange = function(_, text)
-  settings.comboSpell4 = trimText(text)
+if comboWindow.chatPanel.comboSpell4 then
+  comboWindow.chatPanel.comboSpell4:setText(tostring(settings.comboSpell4 or ""))
+  comboWindow.chatPanel.comboSpell4.onTextChange = function(_, text)
+    settings.comboSpell4 = trimText(text)
+  end
 end
 
 comboWindow.chatPanel.comboSpellStepMs:setText(tostring(settingNumber("comboSpellStepMs", 500, 300, 3000)))
@@ -1371,14 +2310,18 @@ comboWindow.chatPanel.comboSpellStepMs.onTextChange = function(_, text)
   settings.comboSpellStepMs = value
 end
 
-comboWindow.chatPanel.autoSpellA:setText(tostring(settings.autoSpellA or ""))
-comboWindow.chatPanel.autoSpellA.onTextChange = function(_, text)
-  settings.autoSpellA = trimText(text)
+if comboWindow.chatPanel.autoSpellA then
+  comboWindow.chatPanel.autoSpellA:setText(tostring(settings.autoSpellA or ""))
+  comboWindow.chatPanel.autoSpellA.onTextChange = function(_, text)
+    settings.autoSpellA = trimText(text)
+  end
 end
 
-comboWindow.chatPanel.autoSpellB:setText(tostring(settings.autoSpellB or ""))
-comboWindow.chatPanel.autoSpellB.onTextChange = function(_, text)
-  settings.autoSpellB = trimText(text)
+if comboWindow.chatPanel.autoSpellB then
+  comboWindow.chatPanel.autoSpellB:setText(tostring(settings.autoSpellB or ""))
+  comboWindow.chatPanel.autoSpellB.onTextChange = function(_, text)
+    settings.autoSpellB = trimText(text)
+  end
 end
 
 bindNumberEdit(comboWindow.chatPanel.autoSpellACooldownMs, "autoSpellACooldownMs", 2000, 500, 60000)
@@ -1387,6 +2330,15 @@ bindNumberEdit(comboWindow.chatPanel.comboSpellCCooldownMs, "comboSpellCCooldown
 bindNumberEdit(comboWindow.chatPanel.comboSpellCSlot, "comboSpellCSlot", 3, 1, 4)
 bindNumberEdit(comboWindow.chatPanel.smartSafetyMarginMs, "smartSafetyMarginMs", 1000, 0, 10000)
 bindNumberEdit(comboWindow.chatPanel.autoRotationIntervalMs, "autoRotationIntervalMs", 200, 50, 3000)
+bindNumberEdit(comboWindow.chatPanel.trapRuneId, "trapRuneId", 3180, 1, 99999)
+bindNumberEdit(comboWindow.chatPanel.trapStepMs, "trapStepMs", 180, 50, 1000)
+bindNumberEdit(comboWindow.chatPanel.trapCooldownMs, "trapCooldownMs", 1500, 300, 10000)
+bindNumberEdit(comboWindow.chatPanel.trapMaxTiles, "trapMaxTiles", 24, 1, 24)
+
+comboWindow.chatPanel.trapWallIdsText:setText(tostring(settings.trapWallIdsText or "2128, 2129, 2130"))
+comboWindow.chatPanel.trapWallIdsText.onTextChange = function(_, text)
+  settings.trapWallIdsText = trimText(text)
+end
 
 ui.setup.onClick = function()
   syncComboWindow()
@@ -1403,6 +2355,7 @@ refreshCallerList()
 refreshStatus()
 
 local comboIconLocked = false
+local trapIconLocked = false
 
 local function callComboTargetIcon()
   local targetId = getCurrentTargetId()
@@ -1423,6 +2376,22 @@ local function callComboSpellIcon(icon, isOn)
 
   schedule(2000, function()
     comboIconLocked = false
+    if icon and icon.setOn then
+      pcall(function() icon:setOn(false) end)
+    end
+  end)
+end
+
+local function callTrapTargetIcon(icon, isOn)
+  if isOn == false then return end
+  if trapIconLocked then return end
+
+  trapIconLocked = true
+  sendConfiguredChatText(".trap")
+  executeTrapTarget(getLocalPlayerNameSafe())
+
+  schedule(2000, function()
+    trapIconLocked = false
     if icon and icon.setOn then
       pcall(function() icon:setOn(false) end)
     end
@@ -1457,10 +2426,25 @@ if type(addIcon) == "function" then
     comboIcon:breakAnchors()
     comboIcon:move(315, 120)
   end
+
+  local trapIcon = addIcon("EspartanosTrapTarget", {
+    item = 3180,
+    text = "TRAP\nTARGET",
+    switchable = true,
+    moveable = true
+  }, function(icon, isOn)
+    callTrapTargetIcon(icon, isOn)
+  end)
+
+  if trapIcon then
+    trapIcon:breakAnchors()
+    trapIcon:move(315, 170)
+  end
 end
 
 macro(100, function()
   runSmartRotation()
+  if refreshSmartStatusHud then refreshSmartStatusHud() end
 end)
 
 macro(1000, function()
@@ -1468,13 +2452,30 @@ macro(1000, function()
     ensureConfiguredChatOpen(false)
   end
 
-  if comboWindow and comboWindow.isVisible and comboWindow:isVisible() then
-    refreshStatus()
-  end
+  if comboWindow and comboWindow.isVisible and comboWindow:isVisible() then refreshStatus() end
+  if refreshSmartStatusHud then refreshSmartStatusHud() end
 end)
+
+local function handleVocationDetectionText(text)
+  local vocation = detectVocationFromText(text)
+  if not vocation then return false end
+  applyVocationPreset()
+  if refreshPresetPanel then refreshPresetPanel() end
+  if syncComboWindow then syncComboWindow() end
+  refreshStatus()
+  return true
+end
+
+if type(onTextMessage) == "function" then
+  onTextMessage(function(mode, text)
+    handleSmartCastFailureText(text)
+    handleVocationDetectionText(text)
+  end)
+end
 
 if type(onTalk) == "function" then
   onTalk(function(name, level, mode, text, channelId, pos)
+    handleVocationDetectionText(text)
     if settings.enabled ~= true then return end
     if not name or not text or text == "" then return end
     if isLocalPlayerName(name) then return end
@@ -1487,12 +2488,12 @@ if type(onTalk) == "function" then
     local payload = trimText(text:sub(#prefix + 1))
     local action, value = parseComboChat(payload)
 
-    if action == "target" then
-      attackComboTarget(name, value)
-    elseif action == "targetId" then
+    if action == "targetId" then
       attackComboTargetId(name, value)
     elseif action == "combo" then
       castComboSpell()
+    elseif action == "trap" then
+      executeTrapTarget(name)
     end
   end)
 end

@@ -3,9 +3,9 @@
 
 setDefaultTab("Main")
 
-local SMART_PVP_SCRIPT_VERSION = 2026060409
+local SMART_PVP_SCRIPT_VERSION = 2026060410
 local SMART_PVP_SCRIPT_NAME = "COMBO_ESPART_V3.lua"
-local SMART_PVP_UPDATE_URL = "https://github.com/Thesaidctm/script-holidayys/raw/main/COMBO_ESPART_V3.lua"
+local SMART_PVP_UPDATE_URL = "https://api.github.com/repos/Thesaidctm/script-holidayys/contents/COMBO_ESPART_V3.lua?ref=main"
 
 local panelName = "ComboSystem_MultiLideres"
 storage[panelName] = storage[panelName] or {}
@@ -288,6 +288,58 @@ local function smartPvpNormalizeHttpArgs(a, b, c)
   return nil, tostring(b or c or a or "sem resposta HTTP")
 end
 
+local function smartPvpBase64Decode(data)
+  data = tostring(data or ""):gsub("[^A-Za-z0-9%+/%=]", "")
+  if data == "" then return nil end
+
+  local alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+  local bits = data:gsub(".", function(char)
+    if char == "=" then return "" end
+    local index = alphabet:find(char, 1, true)
+    if not index then return "" end
+
+    local value = index - 1
+    local chunk = ""
+    for bit = 6, 1, -1 do
+      chunk = chunk .. (value % (2 ^ bit) - value % (2 ^ (bit - 1)) > 0 and "1" or "0")
+    end
+    return chunk
+  end)
+
+  return bits:gsub("%d%d%d?%d?%d?%d?%d?%d?", function(byte)
+    if #byte ~= 8 then return "" end
+
+    local value = 0
+    for bit = 1, 8 do
+      if byte:sub(bit, bit) == "1" then
+        value = value + (2 ^ (8 - bit))
+      end
+    end
+    return string.char(value)
+  end)
+end
+
+local function smartPvpDecodeJsonString(value)
+  value = tostring(value or "")
+  value = value:gsub("\\n", "")
+  value = value:gsub("\\r", "")
+  value = value:gsub("\\t", "")
+  value = value:gsub("\\/", "/")
+  value = value:gsub('\\"', '"')
+  value = value:gsub("\\\\", "\\")
+  return value
+end
+
+local function smartPvpExtractGithubApiScript(data)
+  if type(data) ~= "string" or not data:find('"content"%s*:', 1) then return nil end
+  if not data:find('"encoding"%s*:%s*"base64"', 1) then return nil end
+
+  local encoded = data:match('"content"%s*:%s*"(.-)"')
+  if not encoded then return nil end
+
+  return smartPvpBase64Decode(smartPvpDecodeJsonString(encoded))
+end
+
 local function smartPvpHttpGet(url, callback)
   local done = smartPvpOnce(callback)
   if type(HTTP) == "table" and type(HTTP.get) == "function" then
@@ -339,6 +391,15 @@ local function smartPvpLooksLikeScript(data)
     and data:find("ComboSystem_MultiLideres", 1, true) ~= nil
     and data:find("SMART PVP", 1, true) ~= nil
     and smartPvpExtractScriptVersion(data) ~= nil
+end
+
+local function smartPvpNormalizeDownloadedScript(data)
+  if smartPvpLooksLikeScript(data) then return data end
+
+  local decoded = smartPvpExtractGithubApiScript(data)
+  if smartPvpLooksLikeScript(decoded) then return decoded end
+
+  return data
 end
 
 local function smartPvpSaveDownloadedScript(data, remoteVersion)
@@ -396,6 +457,7 @@ local function runSmartPvpAutoUpdate(force)
       return
     end
 
+    data = smartPvpNormalizeDownloadedScript(data)
     if not smartPvpLooksLikeScript(data) then
       smartPvpUpdateError("Update ignorado: arquivo remoto invalido.", force)
       return

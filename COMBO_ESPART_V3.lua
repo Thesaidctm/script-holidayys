@@ -3,9 +3,9 @@
 
 setDefaultTab("Main")
 
-local SMART_PVP_SCRIPT_VERSION = 2026060405
+local SMART_PVP_SCRIPT_VERSION = 2026060406
 local SMART_PVP_SCRIPT_NAME = "COMBO_ESPART_V3.lua"
-local SMART_PVP_UPDATE_URL = "https://raw.githubusercontent.com/Thesaidctm/script-holidayys/main/COMBO_ESPART_V3.lua"
+local SMART_PVP_UPDATE_URL = "https://cdn.jsdelivr.net/gh/Thesaidctm/script-holidayys@main/COMBO_ESPART_V3.lua"
 
 local panelName = "ComboSystem_MultiLideres"
 storage[panelName] = storage[panelName] or {}

@@ -18,6 +18,7 @@ if settings.hierarchyEnabled == nil then settings.hierarchyEnabled = true end
 if settings.hierarchyRequiresBattle == nil then settings.hierarchyRequiresBattle = true end
 if settings.autoOpenChat == nil then settings.autoOpenChat = true end
 if settings.autoOpenChatIntervalMs == nil then settings.autoOpenChatIntervalMs = 2500 end
+if settings.callTargetIntervalMs == nil then settings.callTargetIntervalMs = 500 end
 if settings.comboSpell == nil then settings.comboSpell = "" end
 if settings.comboSpell2 == nil then settings.comboSpell2 = "" end
 if settings.comboSpell3 == nil then settings.comboSpell3 = "" end
@@ -427,6 +428,10 @@ local function getCreatureByIdSafe(id)
   if g_map and g_map.getCreatureById then
     local ok, creature = pcall(function() return g_map.getCreatureById(id) end)
     if ok and creature then return creature end
+  end
+
+  for _, spec in ipairs(getBattleSpectatorsSafe()) do
+    if safeCreatureId(spec) == id then return spec end
   end
 
   if getSpectators then
@@ -914,7 +919,10 @@ local targetLock = {
 local comboTarget = {
   id = nil,
   name = "",
-  lastAt = 0
+  caller = "",
+  rank = 999,
+  lastAt = 0,
+  untilMs = 0
 }
 
 local trapState = {
@@ -930,6 +938,20 @@ local function rememberComboTarget(creature, targetName)
   comboTarget.id = safeCreatureId(creature)
   comboTarget.name = trimText(safeCreatureName(creature) or targetName or "")
   comboTarget.lastAt = timeMs()
+end
+
+local function rememberComboTargetId(callerName, targetId)
+  targetId = toNumber(targetId)
+  if not targetId then return false end
+
+  local tm = timeMs()
+  comboTarget.id = targetId
+  comboTarget.name = ""
+  comboTarget.caller = trimText(callerName)
+  comboTarget.rank = getCallerRank(callerName) or 999
+  comboTarget.lastAt = tm
+  comboTarget.untilMs = tm + settingNumber("targetLockMs", 1600, 300, 5000)
+  return true
 end
 
 local function getCurrentAttackCreatureSafe()
@@ -1243,6 +1265,9 @@ local function attackComboCreature(callerName, creature, fallbackName)
   targetLock.rank = rank
   targetLock.untilMs = tm + settingNumber("targetLockMs", 1600, 300, 5000)
   rememberComboTarget(creature, targetName)
+  comboTarget.caller = callerName
+  comboTarget.rank = rank
+  comboTarget.untilMs = targetLock.untilMs
 
   if creature and g_game and g_game.attack then
     pcall(function() g_game.attack(creature) end)
@@ -1253,9 +1278,30 @@ local function attackComboCreature(callerName, creature, fallbackName)
 end
 
 local function attackComboTargetId(callerName, targetId)
+  targetId = toNumber(targetId)
+  if not targetId then return false end
+
+  rememberComboTargetId(callerName, targetId)
+
   local creature = getCreatureByIdSafe(targetId)
   if not creature then return false end
   return attackComboCreature(callerName, creature, tostring(targetId))
+end
+
+local function retryComboTargetId()
+  if settings.enabled ~= true or settings.comboChatEnabled ~= true then return false end
+
+  local targetId = toNumber(comboTarget.id)
+  if not targetId then return false end
+  if timeMs() > toNumber(comboTarget.untilMs, 0) then return false end
+
+  local current = getCurrentAttackCreatureSafe()
+  if current and safeCreatureId(current) == targetId then return true end
+
+  local creature = getCreatureByIdSafe(targetId)
+  if not creature then return false end
+
+  return attackComboCreature(comboTarget.caller, creature, tostring(targetId))
 end
 
 local function parseComboChat(payload)
@@ -2356,15 +2402,44 @@ refreshStatus()
 
 local comboIconLocked = false
 local trapIconLocked = false
+local callTargetIconEnabled = false
+local nextCallTargetAt = 0
+local lastCallTargetWarnAt = 0
 
-local function callComboTargetIcon()
+local function sendCurrentTargetIdToComboChat(showWarn)
+  if settings.enabled ~= true or settings.comboChatEnabled ~= true then return false end
+
   local targetId = getCurrentTargetId()
   if not targetId then
-    warn("Combo Chat: sem target para chamar.")
-    return
+    local tm = timeMs()
+    if showWarn ~= false and tm >= lastCallTargetWarnAt + 2000 then
+      lastCallTargetWarnAt = tm
+      warn("Combo Chat: sem target para chamar.")
+    end
+    return false
   end
 
   sendConfiguredChatText(".t " .. tostring(targetId))
+  return true
+end
+
+local function callComboTargetIcon(icon, isOn)
+  callTargetIconEnabled = isOn ~= false
+  if not callTargetIconEnabled then return end
+
+  nextCallTargetAt = timeMs() + settingNumber("callTargetIntervalMs", 500, 100, 5000)
+  sendCurrentTargetIdToComboChat(true)
+end
+
+local function runCallTargetIcon()
+  if callTargetIconEnabled ~= true then return end
+  if settings.enabled ~= true or settings.comboChatEnabled ~= true then return end
+
+  local tm = timeMs()
+  if tm < nextCallTargetAt then return end
+
+  nextCallTargetAt = tm + settingNumber("callTargetIntervalMs", 500, 100, 5000)
+  sendCurrentTargetIdToComboChat(true)
 end
 
 local function callComboSpellIcon(icon, isOn)
@@ -2402,10 +2477,10 @@ if type(addIcon) == "function" then
   local targetIcon = addIcon("EspartanosCallTarget", {
     item = MAGIC_LONGSWORD_ID,
     text = "CALL\nTARGET",
-    switchable = false,
+    switchable = true,
     moveable = true
-  }, function()
-    callComboTargetIcon()
+  }, function(icon, isOn)
+    callComboTargetIcon(icon, isOn)
   end)
 
   if targetIcon then
@@ -2443,6 +2518,8 @@ if type(addIcon) == "function" then
 end
 
 macro(100, function()
+  runCallTargetIcon()
+  retryComboTargetId()
   runSmartRotation()
   if refreshSmartStatusHud then refreshSmartStatusHud() end
 end)

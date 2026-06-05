@@ -3,7 +3,7 @@
 
 setDefaultTab("Main")
 
-local SMART_PVP_SCRIPT_VERSION = 2026060410
+local SMART_PVP_SCRIPT_VERSION = 2026060411
 local SMART_PVP_SCRIPT_NAME = "COMBO_ESPART_V3.lua"
 local SMART_PVP_UPDATE_URL = "https://api.github.com/repos/Thesaidctm/script-holidayys/contents/COMBO_ESPART_V3.lua?ref=main"
 
@@ -1228,7 +1228,8 @@ local comboTarget = {
 }
 
 local trapState = {
-  lastTrapAt = 0
+  lastTrapAt = 0,
+  lastCallerMissingWarnAt = 0
 }
 
 local function isTargetLockActive(tm)
@@ -1316,30 +1317,77 @@ local function getDirectionStepFromSource(targetPos, sourcePos)
 
   local absDx = math.abs(dx)
   local absDy = math.abs(dy)
-  local stepX, stepY = 0, 0
-
-  if absDx == absDy and absDx > 0 then
-    stepX = signNumber(dx)
-    stepY = signNumber(dy)
-  elseif absDx > absDy then
-    stepX = signNumber(dx)
-  else
-    stepY = signNumber(dy)
-  end
+  local stepX = signNumber(dx)
+  local stepY = signNumber(dy)
 
   return stepX, stepY, math.max(absDx, absDy)
 end
 
-local function markOpenTrapLine(open, targetPos, sourcePos, maxRadius)
-  if type(open) ~= "table" then return end
-  local stepX, stepY, distance = getDirectionStepFromSource(targetPos, sourcePos)
+local function markProtectedTrapPosition(open, targetPos, offsetX, offsetY, maxRadius)
+  if type(open) ~= "table" or not targetPos then return end
+  offsetX = toNumber(offsetX, 0) or 0
+  offsetY = toNumber(offsetY, 0) or 0
+  if offsetX == 0 and offsetY == 0 then return end
+  if math.max(math.abs(offsetX), math.abs(offsetY)) > (maxRadius or 2) then return end
+
+  local openPos = {x = targetPos.x + offsetX, y = targetPos.y + offsetY, z = targetPos.z}
+  open[positionKey(openPos)] = true
+end
+
+local function markTrapAttackGate(open, targetPos, sourcePos, maxRadius)
+  local stepX, stepY = getDirectionStepFromSource(targetPos, sourcePos)
   if stepX == 0 and stepY == 0 then return end
 
-  local maxStep = math.min(maxRadius or 2, math.max(1, distance - 1))
-  for step = 1, maxStep do
-    local openPos = {x = targetPos.x + (stepX * step), y = targetPos.y + (stepY * step), z = targetPos.z}
-    open[positionKey(openPos)] = true
+  if stepX ~= 0 and stepY ~= 0 then
+    markProtectedTrapPosition(open, targetPos, stepX, stepY, maxRadius)
+    markProtectedTrapPosition(open, targetPos, stepX, 0, maxRadius)
+    markProtectedTrapPosition(open, targetPos, 0, stepY, maxRadius)
+    return
   end
+
+  if stepX ~= 0 then
+    for side = -1, 1 do
+      markProtectedTrapPosition(open, targetPos, stepX, side, maxRadius)
+    end
+    return
+  end
+
+  for side = -1, 1 do
+    markProtectedTrapPosition(open, targetPos, side, stepY, maxRadius)
+  end
+end
+
+local function markTrapLineCorridor(open, targetPos, sourcePos, maxRadius)
+  if type(open) ~= "table" or not targetPos or not sourcePos or targetPos.z ~= sourcePos.z then return end
+
+  local dx = sourcePos.x - targetPos.x
+  local dy = sourcePos.y - targetPos.y
+  local lengthSq = (dx * dx) + (dy * dy)
+  if lengthSq <= 0 then return end
+
+  local radius = maxRadius or 2
+  for offsetX = -radius, radius do
+    for offsetY = -radius, radius do
+      if offsetX ~= 0 or offsetY ~= 0 then
+        if math.max(math.abs(offsetX), math.abs(offsetY)) <= radius then
+          local dot = (offsetX * dx) + (offsetY * dy)
+          if dot > 0 and dot <= lengthSq then
+            local cross = (offsetX * dy) - (offsetY * dx)
+            if (cross * cross) <= lengthSq then
+              markProtectedTrapPosition(open, targetPos, offsetX, offsetY, radius)
+            end
+          end
+        end
+      end
+    end
+  end
+end
+
+local function markOpenTrapLine(open, targetPos, sourcePos, maxRadius)
+  if type(open) ~= "table" or not targetPos or not sourcePos or targetPos.z ~= sourcePos.z then return end
+
+  markTrapAttackGate(open, targetPos, sourcePos, maxRadius)
+  markTrapLineCorridor(open, targetPos, sourcePos, maxRadius)
 end
 
 local function hashText(text)
@@ -1526,9 +1574,17 @@ local function executeTrapTarget(callerName, targetId)
   local localPos = getLocalPlayerPositionSafe()
   if not target or not targetPos or not localPos or targetPos.z ~= localPos.z then return false end
 
-  local callerCreature = getBattlePlayerByName(callerName)
-  local callerPos = safeCreaturePosition(callerCreature)
+  local callerIsLocal = isLocalPlayerName(callerName)
+  local callerCreature = callerIsLocal and player or getBattlePlayerByName(callerName)
+  local callerPos = callerIsLocal and localPos or safeCreaturePosition(callerCreature)
   if callerPos and callerPos.z ~= targetPos.z then callerPos = nil end
+  if not callerIsLocal and not callerPos then
+    if tm >= toNumber(trapState.lastCallerMissingWarnAt, 0) + 2000 then
+      trapState.lastCallerMissingWarnAt = tm
+      warn("Trap Target: caller fora do battle, trap ignorada.")
+    end
+    return false
+  end
 
   local tiles = buildTrapTiles(targetPos, localPos, callerPos)
   if #tiles == 0 then return false end

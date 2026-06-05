@@ -3,7 +3,7 @@
 
 setDefaultTab("Main")
 
-local SMART_PVP_SCRIPT_VERSION = 2026060403
+local SMART_PVP_SCRIPT_VERSION = 2026060404
 local SMART_PVP_SCRIPT_NAME = "COMBO_ESPART_V3.lua"
 local SMART_PVP_UPDATE_URL = "https://raw.githubusercontent.com/Thesaidctm/script-holidayys/main/COMBO_ESPART_V3.lua"
 
@@ -649,7 +649,7 @@ end
 
 local function safeChatChannelId(channelId)
   channelId = toNumber(channelId)
-  if not channelId or channelId <= 0 then return nil end
+  if not channelId or channelId < 0 then return nil end
   return channelId
 end
 
@@ -700,6 +700,7 @@ local function settingNumber(key, defaultValue, minValue, maxValue)
 end
 
 local nextAutoOpenChatAt = 0
+local lastChatMissingWarnAt = 0
 
 local function isGuildConfiguredChat(chatName)
   local key = normalizeName(chatName)
@@ -774,7 +775,11 @@ local function sendConfiguredChatText(text, retry)
     return false
   end
 
-  warn("Combo Chat: chat da guild nao encontrado.")
+  local tm = timeMs()
+  if tm >= lastChatMissingWarnAt + 3000 then
+    lastChatMissingWarnAt = tm
+    warn("Combo Chat: chat da guild nao encontrado.")
+  end
   return false
 end
 

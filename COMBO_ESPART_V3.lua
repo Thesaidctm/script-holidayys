@@ -3,6 +3,10 @@
 
 setDefaultTab("Main")
 
+local SMART_PVP_SCRIPT_VERSION = 2026060403
+local SMART_PVP_SCRIPT_NAME = "COMBO_ESPART_V3.lua"
+local SMART_PVP_UPDATE_URL = "https://raw.githubusercontent.com/Thesaidctm/script-holidayys/main/COMBO_ESPART_V3.lua"
+
 local panelName = "ComboSystem_MultiLideres"
 storage[panelName] = storage[panelName] or {}
 local settings = storage[panelName]
@@ -12,13 +16,18 @@ local GIANT_SWORD_ID = 3281
 
 if settings.enabled == nil then settings.enabled = oldCombo.enabled == true end
 if settings.commandPrefix == nil then settings.commandPrefix = "." end
-if settings.chatName == nil then settings.chatName = oldCombo.chatName or "Guild" end
+if settings.chatName == nil then settings.chatName = oldCombo.chatName or "ESPARTANOS" end
 if settings.comboChatEnabled == nil then settings.comboChatEnabled = true end
 if settings.hierarchyEnabled == nil then settings.hierarchyEnabled = true end
 if settings.hierarchyRequiresBattle == nil then settings.hierarchyRequiresBattle = true end
 if settings.autoOpenChat == nil then settings.autoOpenChat = true end
 if settings.autoOpenChatIntervalMs == nil then settings.autoOpenChatIntervalMs = 2500 end
 if settings.callTargetIntervalMs == nil then settings.callTargetIntervalMs = 500 end
+if settings.autoUpdateEnabled == nil then settings.autoUpdateEnabled = true end
+if settings.autoUpdateIntervalSeconds == nil then settings.autoUpdateIntervalSeconds = 600 end
+if settings.autoReloadAfterUpdate == nil then settings.autoReloadAfterUpdate = false end
+local initialChatName = tostring(settings.chatName or ""):gsub("^%s+", ""):gsub("%s+$", ""):lower()
+if initialChatName == "guild" or initialChatName == "guild chat" then settings.chatName = "ESPARTANOS" end
 if settings.comboSpell == nil then settings.comboSpell = "" end
 if settings.comboSpell2 == nil then settings.comboSpell2 = "" end
 if settings.comboSpell3 == nil then settings.comboSpell3 = "" end
@@ -225,6 +234,185 @@ local function toNumber(value, defaultValue)
   local ok, numberValue = pcall(function() return tonumber(value) end)
   if ok and numberValue ~= nil then return numberValue end
   return defaultValue
+end
+
+local smartPvpAutoUpdateBusy = false
+local smartPvpLastUpdateErrorAt = 0
+
+local function smartPvpEpochSeconds()
+  if os and os.time then return os.time() end
+  return math.floor(timeMs() / 1000)
+end
+
+local function smartPvpUpdateMessage(text)
+  local message = "[SMART PVP] " .. tostring(text)
+  local shown = false
+  if modules and modules.game_textmessage and modules.game_textmessage.displayGameMessage then
+    local ok = pcall(function() modules.game_textmessage.displayGameMessage(message) end)
+    shown = ok == true
+  end
+  if not shown and warn then
+    warn(message)
+  elseif not shown and print then
+    print(message)
+  end
+end
+
+local function smartPvpUpdateError(text, force)
+  local tm = smartPvpEpochSeconds()
+  if force or tm >= smartPvpLastUpdateErrorAt + 3600 then
+    smartPvpLastUpdateErrorAt = tm
+    smartPvpUpdateMessage(text)
+  end
+end
+
+local function smartPvpOnce(callback)
+  local called = false
+  return function(...)
+    if called then return end
+    called = true
+    callback(...)
+  end
+end
+
+local function smartPvpNormalizeHttpArgs(a, b, c)
+  if type(a) == "string" and #a > 0 then return a, nil end
+  if type(b) == "string" and #b > 0 then return b, nil end
+  if type(c) == "string" and #c > 0 then return c, nil end
+  if type(a) == "table" then
+    if type(a.body) == "string" then return a.body, nil end
+    if type(a.data) == "string" then return a.data, nil end
+    if type(a.response) == "string" then return a.response, nil end
+  end
+  return nil, tostring(b or c or a or "sem resposta HTTP")
+end
+
+local function smartPvpHttpGet(url, callback)
+  local done = smartPvpOnce(callback)
+  if type(HTTP) == "table" and type(HTTP.get) == "function" then
+    local ok = pcall(function()
+      local response = HTTP.get(url, function(a, b, c)
+        local data, err = smartPvpNormalizeHttpArgs(a, b, c)
+        done(data, err)
+      end)
+      if type(response) == "string" then done(response, nil) end
+    end)
+    if ok then return true end
+  end
+
+  if type(g_http) == "table" and type(g_http.get) == "function" then
+    local ok = pcall(function()
+      local response = g_http.get(url, function(a, b, c)
+        local data, err = smartPvpNormalizeHttpArgs(a, b, c)
+        done(data, err)
+      end)
+      if type(response) == "string" then done(response, nil) end
+    end)
+    if ok then return true end
+  end
+
+  done(nil, "HTTP.get/g_http.get indisponivel")
+  return false
+end
+
+local function smartPvpScriptPath()
+  local config = ""
+  if type(configName) == "string" and configName ~= "" then
+    config = configName
+  elseif type(botConfigName) == "string" and botConfigName ~= "" then
+    config = botConfigName
+  else
+    config = "MAGE_FINAL"
+  end
+  return "/bot/" .. config .. "/" .. SMART_PVP_SCRIPT_NAME
+end
+
+local function smartPvpExtractScriptVersion(data)
+  if type(data) ~= "string" then return nil end
+  return toNumber(data:match("SMART_PVP_SCRIPT_VERSION%s*=%s*(%d+)"))
+end
+
+local function smartPvpLooksLikeScript(data)
+  return type(data) == "string"
+    and #data > 10000
+    and data:find("ComboSystem_MultiLideres", 1, true) ~= nil
+    and data:find("SMART PVP", 1, true) ~= nil
+    and smartPvpExtractScriptVersion(data) ~= nil
+end
+
+local function smartPvpSaveDownloadedScript(data, remoteVersion)
+  if type(g_resources) ~= "table" or type(g_resources.writeFileContents) ~= "function" then
+    smartPvpUpdateMessage("Nao foi possivel atualizar: g_resources.writeFileContents indisponivel.")
+    return false
+  end
+
+  local scriptPath = smartPvpScriptPath()
+  if type(g_resources.fileExists) == "function" and type(g_resources.readFileContents) == "function" then
+    local okRead, currentData = pcall(function()
+      if g_resources.fileExists(scriptPath) then return g_resources.readFileContents(scriptPath) end
+      return nil
+    end)
+    if okRead and type(currentData) == "string" and currentData ~= "" then
+      pcall(function() g_resources.writeFileContents(scriptPath .. ".bak", currentData) end)
+    end
+  end
+
+  local okWrite, err = pcall(function()
+    g_resources.writeFileContents(scriptPath, data)
+  end)
+  if not okWrite then
+    smartPvpUpdateMessage("Falha ao salvar update: " .. tostring(err))
+    return false
+  end
+
+  settings.installedScriptVersion = remoteVersion
+  smartPvpUpdateMessage("Atualizado para versao " .. tostring(remoteVersion) .. ". Recarregue o bot para aplicar.")
+
+  if settings.autoReloadAfterUpdate == true and type(schedule) == "function" and type(reload) == "function" then
+    schedule(1500, function() reload() end)
+  end
+
+  return true
+end
+
+local function runSmartPvpAutoUpdate(force)
+  if settings.autoUpdateEnabled ~= true and force ~= true then return false end
+  if smartPvpAutoUpdateBusy then return false end
+
+  local tm = smartPvpEpochSeconds()
+  local interval = toNumber(settings.autoUpdateIntervalSeconds, 600) or 600
+  if interval < 60 then interval = 60 end
+  if interval > 86400 then interval = 86400 end
+  if force ~= true and tm < toNumber(settings.nextAutoUpdateCheckAt, 0) then return false end
+
+  settings.nextAutoUpdateCheckAt = tm + interval
+  smartPvpAutoUpdateBusy = true
+
+  smartPvpHttpGet(SMART_PVP_UPDATE_URL, function(data, err)
+    smartPvpAutoUpdateBusy = false
+    if err or not data then
+      smartPvpUpdateError("Falha ao checar update: " .. tostring(err or "sem dados"), force)
+      return
+    end
+
+    if not smartPvpLooksLikeScript(data) then
+      smartPvpUpdateError("Update ignorado: arquivo remoto invalido.", force)
+      return
+    end
+
+    local remoteVersion = smartPvpExtractScriptVersion(data)
+    if not remoteVersion or remoteVersion <= SMART_PVP_SCRIPT_VERSION then return end
+
+    smartPvpSaveDownloadedScript(data, remoteVersion)
+  end)
+
+  return true
+end
+
+if schedule then
+  schedule(2000, function() runSmartPvpAutoUpdate(false) end)
+else
+  runSmartPvpAutoUpdate(false)
 end
 
 local function namesToText(list)
@@ -459,6 +647,12 @@ local function getVisibleHigherCaller(beforeRank)
   return nil
 end
 
+local function safeChatChannelId(channelId)
+  channelId = toNumber(channelId)
+  if not channelId or channelId <= 0 then return nil end
+  return channelId
+end
+
 local function callerCanCommand(name)
   local rank = getCallerRank(name)
   if not rank then return false end
@@ -470,8 +664,8 @@ local function isConfiguredCommandChannel(channelId)
   if channelId == nil then return true end
   if not getChannelId then return true end
 
-  local incomingChannel = toNumber(channelId)
-  if not incomingChannel then return true end
+  local incomingChannel = safeChatChannelId(channelId)
+  if not incomingChannel then return false end
 
   local candidates = {
     settings.chatName,
@@ -480,7 +674,6 @@ local function isConfiguredCommandChannel(channelId)
     "Guild"
   }
 
-  local hasKnownChannel = false
   local seen = {}
   for _, channelName in ipairs(candidates) do
     channelName = trimText(channelName)
@@ -488,15 +681,14 @@ local function isConfiguredCommandChannel(channelId)
     if channelName ~= "" and not seen[key] then
       seen[key] = true
       local ok, configuredChannel = pcall(function() return getChannelId(channelName) end)
-      configuredChannel = ok and toNumber(configuredChannel) or nil
+      configuredChannel = ok and safeChatChannelId(configuredChannel) or nil
       if configuredChannel then
-        hasKnownChannel = true
         if incomingChannel == configuredChannel then return true end
       end
     end
   end
 
-  return not hasKnownChannel
+  return false
 end
 
 local function settingNumber(key, defaultValue, minValue, maxValue)
@@ -513,6 +705,7 @@ local function isGuildConfiguredChat(chatName)
   local key = normalizeName(chatName)
   if key == "" then return false end
   if key == "guild" or key == "guild chat" then return true end
+  if key == "espartanos" then return true end
   if key == normalizeName(settings.ownGuildName) then return true end
   return false
 end
@@ -522,7 +715,7 @@ local function getChannelIdByName(channelName)
   channelName = trimText(channelName)
   if channelName == "" then return nil end
   local ok, channelId = pcall(function() return getChannelId(channelName) end)
-  if ok then return channelId end
+  if ok then return safeChatChannelId(channelId) end
   return nil
 end
 
@@ -533,6 +726,8 @@ local function getConfiguredChatId()
 
   if isGuildConfiguredChat(chatName) then
     channelId = getChannelIdByName(settings.ownGuildName)
+    if channelId then return channelId end
+    channelId = getChannelIdByName("ESPARTANOS")
     if channelId then return channelId end
     channelId = getChannelIdByName("Guild")
     if channelId then return channelId end
@@ -565,9 +760,9 @@ end
 
 local function sendConfiguredChatText(text, retry)
   local chatId = getConfiguredChatId()
-  if chatId and sayChannel then
-    sayChannel(chatId, text)
-    return true
+  if chatId and type(sayChannel) == "function" then
+    local ok = pcall(function() sayChannel(chatId, text) end)
+    if ok then return true end
   end
 
   ensureConfiguredChatOpen(true)
@@ -2249,7 +2444,7 @@ syncComboWindow = function()
   comboWindow.chatPanel.smartRotation:setOn(settings.smartRotationEnabled == true)
   comboWindow.chatPanel.smartStatusHud:setOn(settings.smartStatusHudEnabled == true)
   comboWindow.chatPanel.trapEnabled:setOn(settings.trapEnabled == true)
-  comboWindow.chatPanel.chatName:setText(tostring(settings.chatName or "Guild"))
+  comboWindow.chatPanel.chatName:setText(tostring(settings.chatName or "ESPARTANOS"))
   if comboWindow.chatPanel.comboSpell then comboWindow.chatPanel.comboSpell:setText(tostring(settings.comboSpell or "")) end
   if comboWindow.chatPanel.comboSpell2 then comboWindow.chatPanel.comboSpell2:setText(tostring(settings.comboSpell2 or "")) end
   if comboWindow.chatPanel.comboSpell3 then comboWindow.chatPanel.comboSpell3:setText(tostring(settings.comboSpell3 or "")) end
@@ -2313,7 +2508,7 @@ comboWindow.callersPanel.callersBlock.nameEdit.onKeyPress = function(_, keyCode)
   return false
 end
 
-comboWindow.chatPanel.chatName:setText(tostring(settings.chatName or "Guild"))
+comboWindow.chatPanel.chatName:setText(tostring(settings.chatName or "ESPARTANOS"))
 comboWindow.chatPanel.chatName.onTextChange = function(_, text)
   settings.chatName = text
   ensureConfiguredChatOpen(true)
@@ -2525,6 +2720,8 @@ macro(100, function()
 end)
 
 macro(1000, function()
+  runSmartPvpAutoUpdate(false)
+
   if settings.enabled == true and settings.comboChatEnabled == true then
     ensureConfiguredChatOpen(false)
   end

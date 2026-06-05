@@ -3,7 +3,7 @@
 
 setDefaultTab("Main")
 
-local SMART_PVP_SCRIPT_VERSION = 2026060404
+local SMART_PVP_SCRIPT_VERSION = 2026060405
 local SMART_PVP_SCRIPT_NAME = "COMBO_ESPART_V3.lua"
 local SMART_PVP_UPDATE_URL = "https://raw.githubusercontent.com/Thesaidctm/script-holidayys/main/COMBO_ESPART_V3.lua"
 
@@ -26,6 +26,7 @@ if settings.callTargetIntervalMs == nil then settings.callTargetIntervalMs = 500
 if settings.autoUpdateEnabled == nil then settings.autoUpdateEnabled = true end
 if settings.autoUpdateIntervalSeconds == nil then settings.autoUpdateIntervalSeconds = 600 end
 if settings.autoReloadAfterUpdate == nil then settings.autoReloadAfterUpdate = false end
+if settings.learnGuildChannel == nil then settings.learnGuildChannel = true end
 local initialChatName = tostring(settings.chatName or ""):gsub("^%s+", ""):gsub("%s+$", ""):lower()
 if initialChatName == "guild" or initialChatName == "guild chat" then settings.chatName = "ESPARTANOS" end
 if settings.comboSpell == nil then settings.comboSpell = "" end
@@ -653,6 +654,33 @@ local function safeChatChannelId(channelId)
   return channelId
 end
 
+local function getConfiguredChatNames()
+  local names = {}
+  local seen = {}
+  local function add(name)
+    name = trimText(name)
+    local key = normalizeName(name)
+    if key ~= "" and not seen[key] then
+      table.insert(names, name)
+      seen[key] = true
+    end
+  end
+
+  add(settings.chatName)
+  add(settings.ownGuildName)
+  add("ESPARTANOS")
+  add("Guild")
+  return names
+end
+
+local function rememberComboChatChannel(channelId)
+  if settings.learnGuildChannel ~= true then return false end
+  channelId = safeChatChannelId(channelId)
+  if channelId == nil then return false end
+  settings.lastGuildChannelId = channelId
+  return true
+end
+
 local function callerCanCommand(name)
   local rank = getCallerRank(name)
   if not rank then return false end
@@ -666,25 +694,13 @@ local function isConfiguredCommandChannel(channelId)
 
   local incomingChannel = safeChatChannelId(channelId)
   if not incomingChannel then return false end
+  if incomingChannel == safeChatChannelId(settings.lastGuildChannelId) then return true end
 
-  local candidates = {
-    settings.chatName,
-    settings.ownGuildName,
-    "ESPARTANOS",
-    "Guild"
-  }
-
-  local seen = {}
-  for _, channelName in ipairs(candidates) do
-    channelName = trimText(channelName)
-    local key = channelName:lower()
-    if channelName ~= "" and not seen[key] then
-      seen[key] = true
-      local ok, configuredChannel = pcall(function() return getChannelId(channelName) end)
-      configuredChannel = ok and safeChatChannelId(configuredChannel) or nil
-      if configuredChannel then
-        if incomingChannel == configuredChannel then return true end
-      end
+  for _, channelName in ipairs(getConfiguredChatNames()) do
+    local ok, configuredChannel = pcall(function() return getChannelId(channelName) end)
+    configuredChannel = ok and safeChatChannelId(configuredChannel) or nil
+    if configuredChannel then
+      if incomingChannel == configuredChannel then return true end
     end
   end
 
@@ -726,13 +742,14 @@ local function getConfiguredChatId()
   if channelId then return channelId end
 
   if isGuildConfiguredChat(chatName) then
-    channelId = getChannelIdByName(settings.ownGuildName)
-    if channelId then return channelId end
-    channelId = getChannelIdByName("ESPARTANOS")
-    if channelId then return channelId end
-    channelId = getChannelIdByName("Guild")
-    if channelId then return channelId end
+    for _, channelName in ipairs(getConfiguredChatNames()) do
+      channelId = getChannelIdByName(channelName)
+      if channelId then return channelId end
+    end
   end
+
+  channelId = safeChatChannelId(settings.lastGuildChannelId)
+  if channelId then return channelId end
 
   return nil
 end
@@ -759,7 +776,30 @@ local function ensureConfiguredChatOpen(force)
   return getConfiguredChatId() ~= nil
 end
 
+local function getChatDebugText()
+  local parts = {}
+  for _, channelName in ipairs(getConfiguredChatNames()) do
+    local id = getChannelIdByName(channelName)
+    table.insert(parts, channelName .. "=" .. tostring(id or "nil"))
+  end
+  table.insert(parts, "learned=" .. tostring(safeChatChannelId(settings.lastGuildChannelId) or "nil"))
+  return table.concat(parts, " ")
+end
+
+local function sendConfiguredChatByName(text)
+  if type(sayin) ~= "function" then return false end
+  for _, channelName in ipairs(getConfiguredChatNames()) do
+    if isGuildConfiguredChat(channelName) then
+      local ok = pcall(function() sayin(channelName, text) end)
+      if ok then return true end
+    end
+  end
+  return false
+end
+
 local function sendConfiguredChatText(text, retry)
+  if sendConfiguredChatByName(text) then return true end
+
   local chatId = getConfiguredChatId()
   if chatId and type(sayChannel) == "function" then
     local ok = pcall(function() sayChannel(chatId, text) end)
@@ -778,7 +818,7 @@ local function sendConfiguredChatText(text, retry)
   local tm = timeMs()
   if tm >= lastChatMissingWarnAt + 3000 then
     lastChatMissingWarnAt = tm
-    warn("Combo Chat: chat da guild nao encontrado.")
+    warn("Combo Chat: chat da guild nao encontrado. " .. getChatDebugText())
   end
   return false
 end
@@ -2759,10 +2799,12 @@ if type(onTalk) == "function" then
     if not name or not text or text == "" then return end
     if isLocalPlayerName(name) then return end
     if not callerCanCommand(name) then return end
-    if not isConfiguredCommandChannel(channelId) then return end
 
     local prefix = tostring(settings.commandPrefix or ".")
     if text:sub(1, #prefix) ~= prefix then return end
+
+    rememberComboChatChannel(channelId)
+    if not isConfiguredCommandChannel(channelId) then return end
 
     local payload = trimText(text:sub(#prefix + 1))
     local action, value = parseComboChat(payload)

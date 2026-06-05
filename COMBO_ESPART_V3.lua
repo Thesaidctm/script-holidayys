@@ -3,7 +3,7 @@
 
 setDefaultTab("Main")
 
-local SMART_PVP_SCRIPT_VERSION = 2026060406
+local SMART_PVP_SCRIPT_VERSION = 2026060407
 local SMART_PVP_SCRIPT_NAME = "COMBO_ESPART_V3.lua"
 local SMART_PVP_UPDATE_URL = "https://cdn.jsdelivr.net/gh/Thesaidctm/script-holidayys@main/COMBO_ESPART_V3.lua"
 
@@ -1447,8 +1447,13 @@ local function tryTrapTile(tilePos, wallIds)
   return useTrapRuneOnTile(tile)
 end
 
-local function executeTrapTarget(callerName)
+local function executeTrapTarget(callerName, targetId)
   if settings.trapEnabled ~= true then return false end
+
+  targetId = toNumber(targetId)
+  if targetId then
+    rememberComboTargetId(callerName, targetId)
+  end
 
   local tm = timeMs()
   local cooldown = settingNumber("trapCooldownMs", 1500, 300, 10000)
@@ -1544,6 +1549,21 @@ local function retryComboTargetId()
   return attackComboCreature(comboTarget.caller, creature, tostring(targetId))
 end
 
+local function parseComboTargetIdArgument(text)
+  text = trimText(text)
+  if text == "" then return nil end
+
+  local lower = text:lower()
+  lower = lower:gsub("^targetid%s*", "")
+  lower = lower:gsub("^target%s*", "")
+  lower = lower:gsub("^id%s*", "")
+  lower = lower:gsub("^t%s*", "")
+
+  local rawTargetId = lower:match("(%d+)")
+  if not rawTargetId then return nil end
+  return toNumber(rawTargetId)
+end
+
 local function parseComboChat(payload)
   payload = trimText(payload)
   if payload == "" or settings.comboChatEnabled ~= true then return "none", "" end
@@ -1552,11 +1572,18 @@ local function parseComboChat(payload)
   if lower == "combo" then return "combo", "" end
   if lower:sub(1, 6) == "combo " then return "none", "" end
   if lower == "trap" then return "trap", "" end
-  if lower:sub(1, 5) == "trap " then return "none", "" end
+  if lower:sub(1, 6) == "trapid" then
+    local targetId = parseComboTargetIdArgument(payload:sub(7))
+    if targetId then return "trap", targetId end
+    return "none", ""
+  end
+  if lower:sub(1, 5) == "trap " then
+    local targetId = parseComboTargetIdArgument(payload:sub(6))
+    if targetId then return "trap", targetId end
+    return "none", ""
+  end
   if lower:sub(1, 2) == "t " then
-    local rawTargetId = trimText(payload:sub(3))
-    if not rawTargetId:match("^%d+$") then return "none", "" end
-    local targetId = toNumber(rawTargetId)
+    local targetId = parseComboTargetIdArgument(payload:sub(3))
     if targetId then return "targetId", targetId end
     return "none", ""
   end
@@ -2645,6 +2672,7 @@ local trapIconLocked = false
 local callTargetIconEnabled = false
 local nextCallTargetAt = 0
 local lastCallTargetWarnAt = 0
+local lastTrapTargetWarnAt = 0
 
 local function sendCurrentTargetIdToComboChat(showWarn)
   if settings.enabled ~= true or settings.comboChatEnabled ~= true then return false end
@@ -2701,9 +2729,22 @@ local function callTrapTargetIcon(icon, isOn)
   if isOn == false then return end
   if trapIconLocked then return end
 
+  local targetId = getCurrentTargetId()
+  if not targetId then
+    local tm = timeMs()
+    if tm >= lastTrapTargetWarnAt + 2000 then
+      lastTrapTargetWarnAt = tm
+      warn("Combo Chat: sem target para trap.")
+    end
+    if icon and icon.setOn then
+      pcall(function() icon:setOn(false) end)
+    end
+    return
+  end
+
   trapIconLocked = true
-  sendConfiguredChatText(".trap")
-  executeTrapTarget(getLocalPlayerNameSafe())
+  sendConfiguredChatText(".trap " .. tostring(targetId))
+  executeTrapTarget(getLocalPlayerNameSafe(), targetId)
 
   schedule(2000, function()
     trapIconLocked = false
@@ -2814,7 +2855,7 @@ if type(onTalk) == "function" then
     elseif action == "combo" then
       castComboSpell()
     elseif action == "trap" then
-      executeTrapTarget(name)
+      executeTrapTarget(name, value)
     end
   end)
 end

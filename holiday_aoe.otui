@@ -1,0 +1,262 @@
+HolidayAoeV2ScrollBar < Panel
+  height: 38
+  margin-top: 6
+  padding: 3
+  image-source: /images/ui/panel_flat
+  image-border: 5
+
+  UIWidget
+    id: text
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.top: parent.top
+    text-align: center
+    height: 14
+    color: #e8edf4
+    font: verdana-11px-rounded
+
+  HorizontalScrollBar
+    id: scroll
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.top: prev.bottom
+    margin-top: 3
+    minimum: 0
+    maximum: 10
+    step: 1
+
+HolidayAoeV2TextEdit < Panel
+  height: 46
+  margin-top: 6
+  padding: 4
+  image-source: /images/ui/panel_flat
+  image-border: 5
+
+  UIWidget
+    id: text
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.top: parent.top
+    text-align: center
+    height: 14
+    color: #e8edf4
+    font: verdana-11px-rounded
+
+  TextEdit
+    id: textEdit
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.top: prev.bottom
+    margin-top: 5
+    text-align: center
+    height: 18
+
+HolidayAoeV2CheckBox < BotSwitch
+  height: 24
+  margin-top: 6
+  text-align: center
+
+HolidayAoeV2VocationLabel < Label
+  height: 21
+  margin-top: 9
+  text-align: center
+  color: #ffd36b
+  font: verdana-11px-bold
+
+HolidayAoeV2VocButton < Button
+  height: 25
+  margin-top: 5
+  text-align: center
+
+HolidayAoeV2Section < Label
+  height: 24
+  margin-top: 11
+  padding: 3
+  text-align: center
+  image-source: /images/ui/panel_flat
+  image-border: 5
+  color: #47f4ff
+  font: verdana-11px-bold
+
+HolidayAoeV2ItemBox < Panel
+  height: 90
+  margin-top: 8
+  image-source: /images/ui/panel_flat
+  image-border: 5
+  padding: 7
+
+  Label
+    id: title
+    anchors.top: parent.top
+    anchors.left: parent.left
+    anchors.right: parent.right
+    height: 16
+    text-align: center
+    color: #47f4ff
+    font: verdana-11px-bold
+
+  Panel
+    id: slot
+    anchors.top: title.bottom
+    anchors.left: parent.left
+    anchors.right: parent.right
+    margin-top: 3
+    height: 54
+    image-source: /images/ui/menubox
+    image-border: 4
+    padding: 4
+
+    BotItem
+      id: item
+      anchors.left: parent.left
+      anchors.top: parent.top
+      margin-top: 3
+      size: 40 40
+
+    Label
+      id: idLabel
+      anchors.top: parent.top
+      anchors.left: item.right
+      anchors.right: parent.right
+      margin-left: 8
+      margin-top: 5
+      height: 16
+      color: #ffd36b
+      font: verdana-11px-bold
+      text-align: left
+
+    Label
+      id: hint
+      anchors.top: idLabel.bottom
+      anchors.left: idLabel.left
+      anchors.right: parent.right
+      margin-top: 2
+      height: 14
+      color: #9fb2c4
+      font: verdana-11px
+      text-align: left
+
+HolidayAoeV2Window < MainWindow
+  !text: tr('Holiday AoE V19')
+  size: 660 650
+  padding: 12
+
+  Panel
+    id: headerPanel
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.top: parent.top
+    height: 66
+    image-source: /images/ui/panel_flat
+    image-border: 5
+    padding: 7
+
+    Label
+      id: title
+      anchors.top: parent.top
+      anchors.left: parent.left
+      anchors.right: parent.right
+      height: 18
+      text-align: center
+      color: #47f4ff
+      font: verdana-11px-bold
+      text: HOLIDAY AOE V19
+
+    Label
+      id: subtitle
+      anchors.top: title.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      margin-top: 3
+      height: 15
+      text-align: center
+      color: #e8edf4
+      font: verdana-11px
+      text: PVE / PVP / SAFE / COMBO
+
+    Label
+      id: modeStrip
+      anchors.top: subtitle.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      margin-top: 3
+      height: 15
+      text-align: center
+      color: #9fb2c4
+      font: verdana-11px
+      text: Aura, E-ring, cooldowns e perfis por vocacao
+
+  VerticalScrollBar
+    id: contentScroll
+    anchors.top: headerPanel.bottom
+    anchors.right: parent.right
+    anchors.bottom: separator.top
+    step: 28
+    pixels-scroll: true
+    margin-right: -10
+    margin-top: 9
+    margin-bottom: 5
+
+  ScrollablePanel
+    id: content
+    anchors.top: contentScroll.top
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.bottom: separator.top
+    vertical-scrollbar: contentScroll
+    margin-bottom: 10
+
+    Panel
+      id: left
+      anchors.top: parent.top
+      anchors.left: parent.left
+      anchors.right: parent.horizontalCenter
+      margin-top: 5
+      margin-left: 9
+      margin-right: 10
+      layout:
+        type: verticalBox
+        fit-children: true
+
+    Panel
+      id: right
+      anchors.top: parent.top
+      anchors.left: parent.horizontalCenter
+      anchors.right: parent.right
+      margin-top: 5
+      margin-left: 10
+      margin-right: 9
+      layout:
+        type: verticalBox
+        fit-children: true
+
+    VerticalSeparator
+      anchors.top: parent.top
+      anchors.bottom: parent.bottom
+      anchors.left: parent.horizontalCenter
+
+  HorizontalSeparator
+    id: separator
+    anchors.right: parent.right
+    anchors.left: parent.left
+    anchors.bottom: closeButton.top
+    margin-bottom: 8
+
+  ResizeBorder
+    id: bottomResizeBorder
+    anchors.fill: separator
+    height: 3
+    minimum: 320
+    maximum: 760
+    margin-left: 3
+    margin-right: 3
+    background: #ffffff88
+
+  Button
+    id: closeButton
+    !text: tr('Fechar')
+    font: cipsoftFont
+    anchors.right: parent.right
+    anchors.bottom: parent.bottom
+    size: 62 22
+    margin-right: 5

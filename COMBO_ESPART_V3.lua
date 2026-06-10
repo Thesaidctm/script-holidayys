@@ -1528,6 +1528,78 @@ local function tileCanShootSafe(tile)
   return true
 end
 
+local function positionDistance(a, b)
+  if not a or not b or a.z ~= b.z then return 999 end
+  return math.max(math.abs((a.x or 0) - (b.x or 0)), math.abs((a.y or 0) - (b.y or 0)))
+end
+
+local function mapSightClearSafe(fromPos, toPos)
+  if not g_map or type(g_map.isSightClear) ~= "function" then return nil end
+
+  local ok, clear = pcall(function() return g_map.isSightClear(fromPos, toPos, true) end)
+  if ok then return clear ~= false end
+
+  ok, clear = pcall(function() return g_map.isSightClear(fromPos, toPos) end)
+  if ok then return clear ~= false end
+
+  return nil
+end
+
+local function manualSightClearSafe(fromPos, toPos)
+  if not fromPos or not toPos or fromPos.z ~= toPos.z then return false end
+
+  local x1, y1 = toNumber(fromPos.x), toNumber(fromPos.y)
+  local x2, y2 = toNumber(toPos.x), toNumber(toPos.y)
+  if not x1 or not y1 or not x2 or not y2 then return false end
+
+  local dx = math.abs(x2 - x1)
+  local dy = math.abs(y2 - y1)
+  local sx = x1 < x2 and 1 or -1
+  local sy = y1 < y2 and 1 or -1
+  local err = dx - dy
+  local x, y = x1, y1
+
+  while not (x == x2 and y == y2) do
+    local e2 = err * 2
+    if e2 > -dy then
+      err = err - dy
+      x = x + sx
+    end
+    if e2 < dx then
+      err = err + dx
+      y = y + sy
+    end
+
+    local tile = getTileSafe({x = x, y = y, z = fromPos.z})
+    if not tile or not tileCanShootSafe(tile) then return false end
+  end
+
+  return true
+end
+
+local function creatureCanBeAttackedNow(creature)
+  local targetPos = safeCreaturePosition(creature)
+  local localPos = getLocalPlayerPositionSafe()
+  if not targetPos or not localPos or targetPos.z ~= localPos.z then return false end
+
+  if creature.getHealthPercent then
+    local ok, hp = pcall(function() return creature:getHealthPercent() end)
+    if ok and toNumber(hp, 100) <= 0 then return false end
+  end
+
+  local maxRange = settingNumber("targetFallbackMaxRange", 8, 1, 15)
+  if positionDistance(localPos, targetPos) > maxRange then return false end
+
+  local targetTile = getTileSafe(targetPos)
+  if not targetTile or not tileCanShootSafe(targetTile) then return false end
+
+  local sightClear = mapSightClearSafe(localPos, targetPos)
+  if sightClear == false then return false end
+  if sightClear == nil and not manualSightClearSafe(localPos, targetPos) then return false end
+
+  return true
+end
+
 local function tileHasTrapWall(tile, wallIds)
   if not tile or type(wallIds) ~= "table" then return false end
 
@@ -1798,7 +1870,7 @@ local function verifyComboTargetAttack(candidate)
 
   schedule(180, function()
     local current = getCurrentAttackCreatureSafe()
-    if current and safeCreatureId(current) == checkId then return end
+    if current and safeCreatureId(current) == checkId and creatureCanBeAttackedNow(current) then return end
     markComboTargetCandidateFailed(candidate, settingNumber("targetLockMs", 1600, 300, 5000))
     if retryComboTargetId then retryComboTargetId() end
   end)
@@ -1814,16 +1886,18 @@ local function attackBestComboTarget()
   for _, candidate in ipairs(getPriorityComboTargetCandidates(tm)) do
     local targetId = toNumber(candidate.id)
     if targetId and not isComboTargetCandidateFailed(candidate, tm) then
-      if currentId == targetId then return true end
-
       local creature = getCreatureByIdSafe(targetId)
-      if creature and safeCreaturePosition(creature) then
+      if creature and creatureCanBeAttackedNow(creature) then
+        if currentId == targetId then return true end
+
         if attackComboCreature(candidate.caller, creature, tostring(targetId), true) then
           verifyComboTargetAttack(candidate)
           return true
         end
 
         markComboTargetCandidateFailed(candidate, 700)
+      else
+        markComboTargetCandidateFailed(candidate, 900)
       end
     end
   end

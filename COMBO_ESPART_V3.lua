@@ -3,7 +3,7 @@
 
 setDefaultTab("Main")
 
-local SMART_PVP_SCRIPT_VERSION = 2026061005
+local SMART_PVP_SCRIPT_VERSION = 2026061006
 local SMART_PVP_SCRIPT_NAME = "COMBO_ESPART_V3.lua"
 local SMART_PVP_UPDATE_URL = "https://api.github.com/repos/Thesaidctm/script-holidayys/contents/COMBO_ESPART_V3.lua?ref=main"
 
@@ -494,7 +494,7 @@ local function runSmartPvpAutoUpdate(force)
 
     if remoteVersion <= SMART_PVP_SCRIPT_VERSION then
       if force then
-        smartPvpUpdateMessage("CheckUpdates: ja esta atualizado. Local " .. tostring(SMART_PVP_SCRIPT_VERSION) .. " / remoto " .. tostring(remoteVersion) .. ".")
+        smartPvpUpdateMessage("ATUALIZADO NA ULTIMA VERSÃO")
       end
       return
     end

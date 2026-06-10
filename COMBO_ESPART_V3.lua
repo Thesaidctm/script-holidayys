@@ -2332,6 +2332,13 @@ ComboChatWindow < MainWindow
     margin-bottom: 8
 
   Button
+    id: updateButton
+    text: Atualizar
+    anchors.left: parent.left
+    anchors.bottom: parent.bottom
+    size: 78 21
+
+  Button
     id: closeButton
     text: Fechar
     anchors.right: parent.right
@@ -2977,6 +2984,12 @@ end
 
 comboWindow.closeButton.onClick = function()
   comboWindow:hide()
+end
+
+if comboWindow.updateButton then
+  comboWindow.updateButton.onClick = function()
+    comboSpartForceUpdate()
+  end
 end
 
 refreshCallerList()

@@ -3,7 +3,7 @@
 
 setDefaultTab("Main")
 
-local SMART_PVP_SCRIPT_VERSION = 2026060411
+local SMART_PVP_SCRIPT_VERSION = 2026061002
 local SMART_PVP_SCRIPT_NAME = "COMBO_ESPART_V3.lua"
 local SMART_PVP_UPDATE_URL = "https://api.github.com/repos/Thesaidctm/script-holidayys/contents/COMBO_ESPART_V3.lua?ref=main"
 
@@ -52,6 +52,9 @@ if settings.trapEnabled == nil then settings.trapEnabled = false end
 if settings.trapRuneId == nil then settings.trapRuneId = 3180 end
 if settings.trapStepMs == nil then settings.trapStepMs = 180 end
 if settings.trapCooldownMs == nil then settings.trapCooldownMs = 1500 end
+if tonumber(settings.trapCooldownVersion) == 2 and tonumber(settings.trapCooldownMs) == 19000 then settings.trapCooldownMs = 1500 end
+settings.trapCooldownVersion = 3
+if settings.trapWallDurationMs == nil then settings.trapWallDurationMs = 19000 end
 if settings.trapMaxTiles == nil then settings.trapMaxTiles = 24 end
 if settings.trapWallIdsText == nil then settings.trapWallIdsText = "2128, 2129, 2130" end
 if settings.trapPatternVersion == nil then
@@ -716,6 +719,37 @@ local function safeChatChannelId(channelId)
   return channelId
 end
 
+local GUILD_CHAT_ALIASES = {
+  "ESPARTANOS",
+  "Guild",
+  "Guild Chat",
+  "Guild Channel",
+  "Guilda",
+  "Chat Guild",
+  "Chat da Guild",
+  "Canal da Guild"
+}
+
+local function getKnownGuildChannelIds()
+  local ids = {}
+  local seen = {}
+  local function add(channelId)
+    channelId = safeChatChannelId(channelId)
+    if channelId ~= nil and not seen[channelId] then
+      table.insert(ids, channelId)
+      seen[channelId] = true
+    end
+  end
+
+  add(settings.lastGuildChannelId)
+  add(type(CHANNEL_GUILD) ~= "nil" and CHANNEL_GUILD or nil)
+  add(type(ChannelGuild) ~= "nil" and ChannelGuild or nil)
+  add(8)
+  add(0)
+
+  return ids
+end
+
 local function getConfiguredChatNames()
   local names = {}
   local seen = {}
@@ -730,8 +764,9 @@ local function getConfiguredChatNames()
 
   add(settings.chatName)
   add(settings.ownGuildName)
-  add("ESPARTANOS")
-  add("Guild")
+  for _, alias in ipairs(GUILD_CHAT_ALIASES) do
+    add(alias)
+  end
   return names
 end
 
@@ -783,8 +818,9 @@ local lastChatMissingWarnAt = 0
 local function isGuildConfiguredChat(chatName)
   local key = normalizeName(chatName)
   if key == "" then return false end
-  if key == "guild" or key == "guild chat" then return true end
-  if key == "espartanos" then return true end
+  for _, alias in ipairs(GUILD_CHAT_ALIASES) do
+    if key == normalizeName(alias) then return true end
+  end
   if key == normalizeName(settings.ownGuildName) then return true end
   return false
 end
@@ -798,7 +834,7 @@ local function getChannelIdByName(channelName)
   return nil
 end
 
-local function getConfiguredChatId()
+local function getConfiguredChatId(allowGuildFallback)
   local chatName = trimText(settings.chatName or "")
   local channelId = getChannelIdByName(chatName)
   if channelId then return channelId end
@@ -808,10 +844,18 @@ local function getConfiguredChatId()
       channelId = getChannelIdByName(channelName)
       if channelId then return channelId end
     end
+
+    if allowGuildFallback ~= false then
+      for _, guildChannelId in ipairs(getKnownGuildChannelIds()) do
+        return guildChannelId
+      end
+    end
   end
 
-  channelId = safeChatChannelId(settings.lastGuildChannelId)
-  if channelId then return channelId end
+  if allowGuildFallback ~= false then
+    channelId = safeChatChannelId(settings.lastGuildChannelId)
+    if channelId then return channelId end
+  end
 
   return nil
 end
@@ -823,7 +867,7 @@ end
 
 local function ensureConfiguredChatOpen(force)
   if settings.autoOpenChat ~= true then return false end
-  if getConfiguredChatId() then return true end
+  if getConfiguredChatId(false) then return true end
 
   local chatName = trimText(settings.chatName or "")
   if chatName == "" or not isGuildConfiguredChat(chatName) then return false end
@@ -832,10 +876,13 @@ local function ensureConfiguredChatOpen(force)
   if not force and tm < nextAutoOpenChatAt then return false end
   nextAutoOpenChatAt = tm + settingNumber("autoOpenChatIntervalMs", 2500, 1000, 10000)
 
-  -- Guild channel is 0 in OTC/TFS.
+  -- Guild channel can be 8 in this OTC; some TFS clients expose it as 0 internally.
+  tryGameCall("joinChannel", 8)
+  tryGameCall("openChannel", 8)
   tryGameCall("joinChannel", 0)
+  tryGameCall("openChannel", 0)
 
-  return getConfiguredChatId() ~= nil
+  return getConfiguredChatId(false) ~= nil
 end
 
 local function getChatDebugText()
@@ -845,6 +892,7 @@ local function getChatDebugText()
     table.insert(parts, channelName .. "=" .. tostring(id or "nil"))
   end
   table.insert(parts, "learned=" .. tostring(safeChatChannelId(settings.lastGuildChannelId) or "nil"))
+  table.insert(parts, "guildIds=" .. table.concat(getKnownGuildChannelIds(), ","))
   return table.concat(parts, " ")
 end
 
@@ -852,21 +900,21 @@ local function sendConfiguredChatByName(text)
   if type(sayin) ~= "function" then return false end
   for _, channelName in ipairs(getConfiguredChatNames()) do
     if isGuildConfiguredChat(channelName) then
-      local ok = pcall(function() sayin(channelName, text) end)
-      if ok then return true end
+      local ok, result = pcall(function() return sayin(channelName, text) end)
+      if ok and result ~= false then return true end
     end
   end
   return false
 end
 
 local function sendConfiguredChatText(text, retry)
-  if sendConfiguredChatByName(text) then return true end
-
   local chatId = getConfiguredChatId()
   if chatId and type(sayChannel) == "function" then
-    local ok = pcall(function() sayChannel(chatId, text) end)
-    if ok then return true end
+    local ok, result = pcall(function() return sayChannel(chatId, text) end)
+    if ok and result ~= false then return true end
   end
+
+  if sendConfiguredChatByName(text) then return true end
 
   ensureConfiguredChatOpen(true)
 
@@ -1224,12 +1272,15 @@ local comboTarget = {
   caller = "",
   rank = 999,
   lastAt = 0,
-  untilMs = 0
+  untilMs = 0,
+  candidates = {},
+  failedUntil = {}
 }
 
 local trapState = {
   lastTrapAt = 0,
-  lastCallerMissingWarnAt = 0
+  lastCallerMissingWarnAt = 0,
+  activeWalls = {}
 }
 
 local function isTargetLockActive(tm)
@@ -1243,17 +1294,63 @@ local function rememberComboTarget(creature, targetName)
   comboTarget.lastAt = timeMs()
 end
 
+local function comboTargetCandidateKey(callerName, targetId)
+  return normalizeName(callerName) .. "|" .. tostring(toNumber(targetId) or "")
+end
+
+local function cleanupComboTargetCandidates(tm)
+  tm = tm or timeMs()
+
+  for key, candidate in pairs(comboTarget.candidates or {}) do
+    if type(candidate) ~= "table" or toNumber(candidate.untilMs, 0) <= tm then
+      comboTarget.candidates[key] = nil
+    end
+  end
+
+  for key, untilMs in pairs(comboTarget.failedUntil or {}) do
+    if toNumber(untilMs, 0) <= tm then
+      comboTarget.failedUntil[key] = nil
+    end
+  end
+end
+
+local function markComboTargetCandidateFailed(candidate, durationMs)
+  if not candidate then return end
+  local key = comboTargetCandidateKey(candidate.caller, candidate.id)
+  if key == "|" then return end
+  comboTarget.failedUntil[key] = timeMs() + (durationMs or 700)
+end
+
+local function isComboTargetCandidateFailed(candidate, tm)
+  if not candidate then return true end
+  local key = comboTargetCandidateKey(candidate.caller, candidate.id)
+  return toNumber(comboTarget.failedUntil[key], 0) > (tm or timeMs())
+end
+
 local function rememberComboTargetId(callerName, targetId)
   targetId = toNumber(targetId)
   if not targetId then return false end
 
   local tm = timeMs()
+  local callerKey = normalizeName(callerName)
+  local candidate = {
+    id = targetId,
+    caller = trimText(callerName),
+    rank = getCallerRank(callerName) or 999,
+    lastAt = tm,
+    untilMs = tm + settingNumber("targetLockMs", 1600, 300, 5000)
+  }
+
+  if callerKey ~= "" then
+    comboTarget.candidates[callerKey] = candidate
+  end
+
   comboTarget.id = targetId
   comboTarget.name = ""
-  comboTarget.caller = trimText(callerName)
-  comboTarget.rank = getCallerRank(callerName) or 999
+  comboTarget.caller = candidate.caller
+  comboTarget.rank = candidate.rank
   comboTarget.lastAt = tm
-  comboTarget.untilMs = tm + settingNumber("targetLockMs", 1600, 300, 5000)
+  comboTarget.untilMs = candidate.untilMs
   return true
 end
 
@@ -1467,6 +1564,32 @@ local function tileHasTrapWall(tile, wallIds)
   return false
 end
 
+local function cleanupActiveTrapWalls(tm)
+  tm = tm or timeMs()
+  for key, expiresAt in pairs(trapState.activeWalls or {}) do
+    if toNumber(expiresAt, 0) <= tm then
+      trapState.activeWalls[key] = nil
+    end
+  end
+end
+
+local function hasActiveTrapWallTimer(tilePos, tm)
+  if not tilePos then return false end
+  tm = tm or timeMs()
+  local key = positionKey(tilePos)
+  local expiresAt = toNumber(trapState.activeWalls and trapState.activeWalls[key], 0)
+  if expiresAt > tm then return true end
+  if trapState.activeWalls then trapState.activeWalls[key] = nil end
+  return false
+end
+
+local function rememberActiveTrapWall(tilePos)
+  if not tilePos then return end
+  local duration = settingNumber("trapWallDurationMs", 19000, 1000, 60000)
+  if duration <= 0 then return end
+  trapState.activeWalls[positionKey(tilePos)] = timeMs() + duration
+end
+
 local function tileHasCreatureSafe(tile)
   if not tile or not tile.getCreatures then return false end
   local ok, creatures = pcall(function() return tile:getCreatures() end)
@@ -1549,12 +1672,20 @@ local function buildTrapTiles(targetPos, localPos, callerPos)
 end
 
 local function tryTrapTile(tilePos, wallIds)
+  local tm = timeMs()
+  cleanupActiveTrapWalls(tm)
+  if hasActiveTrapWallTimer(tilePos, tm) then return false end
+
   local tile = getTileSafe(tilePos)
   if not tile then return false end
   if not tileCanShootSafe(tile) then return false end
   if tileHasCreatureSafe(tile) then return false end
   if tileHasTrapWall(tile, wallIds) then return false end
-  return useTrapRuneOnTile(tile)
+  if useTrapRuneOnTile(tile) then
+    rememberActiveTrapWall(tilePos)
+    return true
+  end
+  return false
 end
 
 local function executeTrapTarget(callerName, targetId)
@@ -1611,7 +1742,7 @@ local function executeTrapTarget(callerName, targetId)
   return true
 end
 
-local function attackComboCreature(callerName, creature, fallbackName)
+local function attackComboCreature(callerName, creature, fallbackName, ignorePriorityLock)
   callerName = trimText(callerName)
   local targetName = trimText(safeCreatureName(creature) or fallbackName or "")
   if targetName == "" then return false end
@@ -1619,7 +1750,7 @@ local function attackComboCreature(callerName, creature, fallbackName)
 
   local tm = timeMs()
   local rank = getCallerRank(callerName) or 999
-  if isTargetLockActive(tm) and not sameName(targetLock.name, targetName) and rank > toNumber(targetLock.rank, 999) then
+  if not ignorePriorityLock and isTargetLockActive(tm) and not sameName(targetLock.name, targetName) and rank > toNumber(targetLock.rank, 999) then
     return false
   end
 
@@ -1640,31 +1771,76 @@ local function attackComboCreature(callerName, creature, fallbackName)
   return false
 end
 
+local function getPriorityComboTargetCandidates(tm)
+  tm = tm or timeMs()
+  cleanupComboTargetCandidates(tm)
+
+  local candidates = {}
+  local seen = {}
+  for _, callerName in ipairs(getCallers()) do
+    local callerKey = normalizeName(callerName)
+    local candidate = comboTarget.candidates[callerKey]
+    if candidate and not seen[callerKey] and toNumber(candidate.untilMs, 0) > tm then
+      table.insert(candidates, candidate)
+      seen[callerKey] = true
+    end
+  end
+
+  return candidates
+end
+
+local retryComboTargetId
+
+local function verifyComboTargetAttack(candidate)
+  if not candidate or not schedule then return end
+  local checkId = toNumber(candidate.id)
+  if not checkId then return end
+
+  schedule(180, function()
+    local current = getCurrentAttackCreatureSafe()
+    if current and safeCreatureId(current) == checkId then return end
+    markComboTargetCandidateFailed(candidate, settingNumber("targetLockMs", 1600, 300, 5000))
+    if retryComboTargetId then retryComboTargetId() end
+  end)
+end
+
+local function attackBestComboTarget()
+  if settings.enabled ~= true or settings.comboChatEnabled ~= true then return false end
+
+  local tm = timeMs()
+  local current = getCurrentAttackCreatureSafe()
+  local currentId = safeCreatureId(current)
+
+  for _, candidate in ipairs(getPriorityComboTargetCandidates(tm)) do
+    local targetId = toNumber(candidate.id)
+    if targetId and not isComboTargetCandidateFailed(candidate, tm) then
+      if currentId == targetId then return true end
+
+      local creature = getCreatureByIdSafe(targetId)
+      if creature and safeCreaturePosition(creature) then
+        if attackComboCreature(candidate.caller, creature, tostring(targetId), true) then
+          verifyComboTargetAttack(candidate)
+          return true
+        end
+
+        markComboTargetCandidateFailed(candidate, 700)
+      end
+    end
+  end
+
+  return false
+end
+
 local function attackComboTargetId(callerName, targetId)
   targetId = toNumber(targetId)
   if not targetId then return false end
 
   rememberComboTargetId(callerName, targetId)
-
-  local creature = getCreatureByIdSafe(targetId)
-  if not creature then return false end
-  return attackComboCreature(callerName, creature, tostring(targetId))
+  return attackBestComboTarget()
 end
 
-local function retryComboTargetId()
-  if settings.enabled ~= true or settings.comboChatEnabled ~= true then return false end
-
-  local targetId = toNumber(comboTarget.id)
-  if not targetId then return false end
-  if timeMs() > toNumber(comboTarget.untilMs, 0) then return false end
-
-  local current = getCurrentAttackCreatureSafe()
-  if current and safeCreatureId(current) == targetId then return true end
-
-  local creature = getCreatureByIdSafe(targetId)
-  if not creature then return false end
-
-  return attackComboCreature(comboTarget.caller, creature, tostring(targetId))
+function retryComboTargetId()
+  return attackBestComboTarget()
 end
 
 local function parseComboTargetIdArgument(text)
@@ -2112,8 +2288,27 @@ ComboChatWindow < MainWindow
       text-align: center
 
     Label
-      id: trapWallIdsLabel
+      id: trapWallDurationLabel
       anchors.top: trapCooldownLabel.bottom
+      anchors.left: parent.left
+      margin-top: 7
+      width: 58
+      height: 18
+      text-offset: 0 3
+      text: Timer:
+
+    TextEdit
+      id: trapWallDurationMs
+      anchors.top: trapWallDurationLabel.top
+      anchors.left: trapWallDurationLabel.right
+      anchors.right: parent.right
+      margin-left: 5
+      height: 18
+      text-align: center
+
+    Label
+      id: trapWallIdsLabel
+      anchors.top: trapWallDurationLabel.bottom
       anchors.left: parent.left
       margin-top: 7
       width: 58
@@ -2651,6 +2846,7 @@ syncComboWindow = function()
   comboWindow.chatPanel.trapRuneId:setText(tostring(settingNumber("trapRuneId", 3180, 1, 99999)))
   comboWindow.chatPanel.trapStepMs:setText(tostring(settingNumber("trapStepMs", 180, 50, 1000)))
   comboWindow.chatPanel.trapCooldownMs:setText(tostring(settingNumber("trapCooldownMs", 1500, 300, 10000)))
+  comboWindow.chatPanel.trapWallDurationMs:setText(tostring(settingNumber("trapWallDurationMs", 19000, 1000, 60000)))
   comboWindow.chatPanel.trapMaxTiles:setText(tostring(settingNumber("trapMaxTiles", 24, 1, 24)))
   comboWindow.chatPanel.trapWallIdsText:setText(tostring(settings.trapWallIdsText or "2128, 2129, 2130"))
   refreshPresetPanel()
@@ -2764,6 +2960,7 @@ bindNumberEdit(comboWindow.chatPanel.autoRotationIntervalMs, "autoRotationInterv
 bindNumberEdit(comboWindow.chatPanel.trapRuneId, "trapRuneId", 3180, 1, 99999)
 bindNumberEdit(comboWindow.chatPanel.trapStepMs, "trapStepMs", 180, 50, 1000)
 bindNumberEdit(comboWindow.chatPanel.trapCooldownMs, "trapCooldownMs", 1500, 300, 10000)
+bindNumberEdit(comboWindow.chatPanel.trapWallDurationMs, "trapWallDurationMs", 19000, 1000, 60000)
 bindNumberEdit(comboWindow.chatPanel.trapMaxTiles, "trapMaxTiles", 24, 1, 24)
 
 comboWindow.chatPanel.trapWallIdsText:setText(tostring(settings.trapWallIdsText or "2128, 2129, 2130"))
@@ -2957,7 +3154,7 @@ if type(onTalk) == "function" then
     if settings.enabled ~= true then return end
     if not name or not text or text == "" then return end
     if isLocalPlayerName(name) then return end
-    if not callerCanCommand(name) then return end
+    if not getCallerRank(name) then return end
 
     local prefix = tostring(settings.commandPrefix or ".")
     if text:sub(1, #prefix) ~= prefix then return end
@@ -2971,8 +3168,10 @@ if type(onTalk) == "function" then
     if action == "targetId" then
       attackComboTargetId(name, value)
     elseif action == "combo" then
+      if not callerCanCommand(name) then return end
       castComboSpell()
     elseif action == "trap" then
+      if not callerCanCommand(name) then return end
       executeTrapTarget(name, value)
     end
   end)

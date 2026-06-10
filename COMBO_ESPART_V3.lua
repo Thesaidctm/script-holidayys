@@ -3,7 +3,7 @@
 
 setDefaultTab("Main")
 
-local SMART_PVP_SCRIPT_VERSION = 2026061004
+local SMART_PVP_SCRIPT_VERSION = 2026061005
 local SMART_PVP_SCRIPT_NAME = "COMBO_ESPART_V3.lua"
 local SMART_PVP_UPDATE_URL = "https://api.github.com/repos/Thesaidctm/script-holidayys/contents/COMBO_ESPART_V3.lua?ref=main"
 
@@ -242,6 +242,7 @@ end
 
 local smartPvpAutoUpdateBusy = false
 local smartPvpLastUpdateErrorAt = 0
+local smartPvpUpdateRequestId = 0
 
 local function smartPvpEpochSeconds()
   if os and os.time then return os.time() end
@@ -442,7 +443,10 @@ end
 
 local function runSmartPvpAutoUpdate(force)
   if settings.autoUpdateEnabled ~= true and force ~= true then return false end
-  if smartPvpAutoUpdateBusy then return false end
+  if smartPvpAutoUpdateBusy then
+    if force then smartPvpUpdateMessage("CheckUpdates ja esta em andamento.") end
+    return false
+  end
 
   local tm = smartPvpEpochSeconds()
   local interval = toNumber(settings.autoUpdateIntervalSeconds, 600) or 600
@@ -452,8 +456,24 @@ local function runSmartPvpAutoUpdate(force)
 
   settings.nextAutoUpdateCheckAt = tm + interval
   smartPvpAutoUpdateBusy = true
+  smartPvpUpdateRequestId = smartPvpUpdateRequestId + 1
+  local requestId = smartPvpUpdateRequestId
+
+  if force then
+    smartPvpUpdateMessage("CheckUpdates: checando GitHub...")
+  end
+
+  if force and type(schedule) == "function" then
+    schedule(12000, function()
+      if smartPvpAutoUpdateBusy and smartPvpUpdateRequestId == requestId then
+        smartPvpAutoUpdateBusy = false
+        smartPvpUpdateMessage("CheckUpdates: sem resposta HTTP em 12s. Se persistir, baixe manualmente pelo raw do GitHub.")
+      end
+    end)
+  end
 
   smartPvpHttpGet(SMART_PVP_UPDATE_URL, function(data, err)
+    if smartPvpUpdateRequestId ~= requestId then return end
     smartPvpAutoUpdateBusy = false
     if err or not data then
       smartPvpUpdateError("Falha ao checar update: " .. tostring(err or "sem dados"), force)
@@ -467,13 +487,31 @@ local function runSmartPvpAutoUpdate(force)
     end
 
     local remoteVersion = smartPvpExtractScriptVersion(data)
-    if not remoteVersion or remoteVersion <= SMART_PVP_SCRIPT_VERSION then return end
+    if not remoteVersion then
+      smartPvpUpdateError("CheckUpdates: nao consegui ler a versao remota.", force)
+      return
+    end
+
+    if remoteVersion <= SMART_PVP_SCRIPT_VERSION then
+      if force then
+        smartPvpUpdateMessage("CheckUpdates: ja esta atualizado. Local " .. tostring(SMART_PVP_SCRIPT_VERSION) .. " / remoto " .. tostring(remoteVersion) .. ".")
+      end
+      return
+    end
 
     smartPvpSaveDownloadedScript(data, remoteVersion)
   end)
 
   return true
 end
+
+comboSpartForceUpdate = function()
+  settings.nextAutoUpdateCheckAt = 0
+  return runSmartPvpAutoUpdate(true)
+end
+
+checkupdates = comboSpartForceUpdate
+checkUpdates = comboSpartForceUpdate
 
 if schedule then
   schedule(2000, function() runSmartPvpAutoUpdate(false) end)
@@ -1937,6 +1975,7 @@ local function parseComboChat(payload)
   if payload == "" or settings.comboChatEnabled ~= true then return "none", "" end
 
   local lower = payload:lower()
+  if lower == "checkupdates" or lower == "checkupdate" or lower == "updates" or lower == "update" then return "checkupdates", "" end
   if lower == "combo" then return "combo", "" end
   if lower:sub(1, 6) == "combo " then return "none", "" end
   if lower == "trap" then return "trap", "" end
@@ -3238,19 +3277,25 @@ end
 if type(onTalk) == "function" then
   onTalk(function(name, level, mode, text, channelId, pos)
     handleVocationDetectionText(text)
-    if settings.enabled ~= true then return end
     if not name or not text or text == "" then return end
-    if isLocalPlayerName(name) then return end
-    if not getCallerRank(name) then return end
 
     local prefix = tostring(settings.commandPrefix or ".")
     if text:sub(1, #prefix) ~= prefix then return end
 
-    rememberComboChatChannel(channelId)
-    if not isConfiguredCommandChannel(channelId) then return end
-
     local payload = trimText(text:sub(#prefix + 1))
     local action, value = parseComboChat(payload)
+
+    if action == "checkupdates" then
+      comboSpartForceUpdate()
+      return
+    end
+
+    if settings.enabled ~= true then return end
+    if isLocalPlayerName(name) then return end
+    if not getCallerRank(name) then return end
+
+    rememberComboChatChannel(channelId)
+    if not isConfiguredCommandChannel(channelId) then return end
 
     if action == "targetId" then
       attackComboTargetId(name, value)

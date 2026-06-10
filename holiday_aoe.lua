@@ -1,5 +1,5 @@
 -- ============================================================
--- HOLIDAY AOE VOCATION SPELLS V19 - SAFE ICON + COMBO + PERFIS + COOLDOWNS + AUTO UPDATE
+-- HOLIDAY AOE VOCATION SPELLS V19.1 - SAFE ICON + COMBO + PERFIS + COOLDOWNS + AUTO UPDATE
 -- Baseado no script enviado pelo usuario.
 --
 -- Ajustes principais:
@@ -27,7 +27,7 @@
 
 setDefaultTab("Main")
 
-local HOLIDAY_AOE_SCRIPT_VERSION = 2026060901
+local HOLIDAY_AOE_SCRIPT_VERSION = 2026060902
 local HOLIDAY_AOE_SCRIPT_NAME = "holiday_aoe.lua"
 local HOLIDAY_AOE_OTUI_NAME = "holiday_aoe.otui"
 local HOLIDAY_AOE_UPDATE_URL = "https://api.github.com/repos/Thesaidctm/script-holidayys/contents/holiday_aoe.lua?ref=main"
@@ -154,7 +154,7 @@ local function initDefaults()
     ekGranIcoSpell = "exori gran ico",
     ekGranSpell = "exori gran",
 
-    note = "V19: auto update + guardrails"
+    note = "V19.1: auto update scope hotfix"
   }
 
   for k, v in pairs(defaults) do
@@ -415,6 +415,7 @@ local function debugWarn(text)
   if aoeIsOn("enableDebug", false) and warn then warn(text) end
 end
 
+do
 local holidayAoeAutoUpdateBusy = false
 local holidayAoeLastUpdateErrorAt = 0
 
@@ -719,6 +720,7 @@ if schedule then
   schedule(2500, function() runHolidayAoeAutoUpdate(false) end)
 else
   runHolidayAoeAutoUpdate(false)
+end
 end
 
 -- ============================================================
@@ -1235,7 +1237,7 @@ Panel
     text-align: center
     color: #47f4ff
     font: verdana-11px-bold
-    text: Holiday AoE V19
+    text: Holiday AoE V19.1
 
   Label
     id: subtitle
@@ -1256,7 +1258,7 @@ Panel
     if launcher.title then launcher.title.onClick = openHolidayWindow end
     if launcher.subtitle then launcher.subtitle.onClick = openHolidayWindow end
   else
-    UI.Button("Holiday AoE V19", openHolidayWindow)
+    UI.Button("Holiday AoE V19.1", openHolidayWindow)
   end
   UI.Separator()
 
@@ -1309,7 +1311,9 @@ Panel
   updateButton:setText("Checar Update")
   updateButton:setTooltip("Forca uma checagem de update do Holiday AoE.")
   updateButton.onClick = function()
-    runHolidayAoeAutoUpdate(true)
+    if HolidayAOE and HolidayAOE.checkUpdateNow then
+      HolidayAOE.checkUpdateNow()
+    end
     focusGameMapSoon(100)
   end
   addCheckBox("enableDebug", "Debug", false, leftPanel, "Mostra logs de decisao.")
@@ -1334,7 +1338,7 @@ Panel
 
   refreshClassSettingsVisibility()
 else
-  UI.Button("Holiday AoE V19: OTUI faltando", function()
+  UI.Button("Holiday AoE V19.1: OTUI faltando", function()
     warn("Coloque o arquivo .otui na mesma pasta do script.")
   end)
   UI.Separator()
@@ -3889,7 +3893,7 @@ macro(50, function()
   if aoeIsOn("enableDebug", false) and tm >= lastDebug then
     lastDebug = tm + 30000
     ensureScan()
-    warn("Holiday V19 | modo=" .. mode .. " | voc=" .. vocation .. " | mobs=" .. tostring(#mobs) .. " | targetPlayer=" .. tostring(targetIsPlayer))
+    warn("Holiday V19.1 | modo=" .. mode .. " | voc=" .. vocation .. " | mobs=" .. tostring(#mobs) .. " | targetPlayer=" .. tostring(targetIsPlayer))
   end
 end)
 

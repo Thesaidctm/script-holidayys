@@ -137,7 +137,7 @@ HolidayAoeV2ItemBox < Panel
       text-align: left
 
 HolidayAoeV2Window < MainWindow
-  !text: tr('Holiday AoE V19')
+  !text: tr('Holiday AoE V19.1')
   size: 660 650
   padding: 12
 
@@ -160,7 +160,7 @@ HolidayAoeV2Window < MainWindow
       text-align: center
       color: #47f4ff
       font: verdana-11px-bold
-      text: HOLIDAY AOE V19
+      text: HOLIDAY AOE V19.1
 
     Label
       id: subtitle

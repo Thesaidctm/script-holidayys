@@ -3,7 +3,7 @@
 
 setDefaultTab("Main")
 
-local SMART_PVP_SCRIPT_VERSION = 2026061006
+local SMART_PVP_SCRIPT_VERSION = 2026061007
 local SMART_PVP_SCRIPT_NAME = "COMBO_ESPART_V3.lua"
 local SMART_PVP_UPDATE_URL = "https://api.github.com/repos/Thesaidctm/script-holidayys/contents/COMBO_ESPART_V3.lua?ref=main"
 
@@ -70,6 +70,7 @@ if settings.presetBChoice == nil then settings.presetBChoice = 1 end
 if settings.presetCChoice == nil then settings.presetCChoice = 1 end
 if settings.targetLockMs == nil then settings.targetLockMs = 1600 end
 if type(settings.leaderList) ~= "table" then settings.leaderList = {} end
+if type(settings.iconHotkeys) ~= "table" then settings.iconHotkeys = {} end
 
 local function trimText(text)
   text = tostring(text or ""):gsub("%s+", " ")
@@ -3195,6 +3196,151 @@ local function callTrapTargetIcon(icon, isOn)
   end)
 end
 
+local comboIconHotkeyCapture = nil
+local comboIconHotkeyActions = {}
+local comboIconHotkeyLastAt = {}
+local comboIconHotkeyOrder = {"callTarget", "sendCombo", "trapTarget"}
+
+local function normalizeComboIconHotkey(keys)
+  if type(keys) == "table" then
+    keys = keys.key or keys[1] or keys.name or ""
+  end
+  local text = trimText(keys)
+  if text == "" then return nil end
+  text = text:gsub("%s+", "")
+  if text == "" then return nil end
+  return text:upper()
+end
+
+local function comboIconHotkeyLabel(actionKey)
+  if actionKey == "callTarget" then return "CALL TARGET" end
+  if actionKey == "sendCombo" then return "ENVIAR COMBO" end
+  if actionKey == "trapTarget" then return "TRAP TARGET" end
+  return tostring(actionKey or "icone")
+end
+
+local function comboIconHotkeyMessage(text)
+  if type(smartPvpUpdateMessage) == "function" then
+    smartPvpUpdateMessage(text)
+  elseif warn then
+    warn("[SMART PVP] " .. tostring(text))
+  end
+end
+
+local function isRightMouseButton(button)
+  return button == 2 or (MouseRightButton ~= nil and button == MouseRightButton)
+end
+
+local function setIconOnSafe(icon, enabled)
+  if icon and icon.setOn then
+    pcall(function() icon:setOn(enabled == true) end)
+  end
+end
+
+local function updateComboIconHotkeyTooltip(actionKey)
+  local action = comboIconHotkeyActions[actionKey]
+  if not action or not action.icon or not action.icon.setTooltip then return end
+
+  local hotkey = settings.iconHotkeys[actionKey]
+  local current = hotkey and ("Atual: " .. tostring(hotkey)) or "Sem hotkey"
+  pcall(function()
+    action.icon:setTooltip(comboIconHotkeyLabel(actionKey) .. "\nBotao direito: bindar hotkey\n" .. current)
+  end)
+end
+
+local function bindComboIconHotkey(actionKey, hotkey)
+  hotkey = normalizeComboIconHotkey(hotkey)
+  if not hotkey then return false end
+
+  for _, otherKey in ipairs(comboIconHotkeyOrder) do
+    if otherKey ~= actionKey and normalizeComboIconHotkey(settings.iconHotkeys[otherKey]) == hotkey then
+      settings.iconHotkeys[otherKey] = nil
+      updateComboIconHotkeyTooltip(otherKey)
+    end
+  end
+
+  settings.iconHotkeys[actionKey] = hotkey
+  updateComboIconHotkeyTooltip(actionKey)
+  comboIconHotkeyMessage("Hotkey de " .. comboIconHotkeyLabel(actionKey) .. ": " .. hotkey)
+  return true
+end
+
+local function removeComboIconHotkey(actionKey)
+  settings.iconHotkeys[actionKey] = nil
+  updateComboIconHotkeyTooltip(actionKey)
+  comboIconHotkeyMessage("Hotkey removida de " .. comboIconHotkeyLabel(actionKey) .. ".")
+end
+
+local function startComboIconHotkeyCapture(actionKey)
+  if type(onKeyDown) ~= "function" then
+    comboIconHotkeyMessage("Hotkey indisponivel neste cliente.")
+    return true
+  end
+
+  comboIconHotkeyCapture = actionKey
+  comboIconHotkeyMessage("Aperte a tecla para " .. comboIconHotkeyLabel(actionKey) .. ". Esc cancela, Delete remove.")
+  return true
+end
+
+local function triggerComboIconHotkey(actionKey)
+  local action = comboIconHotkeyActions[actionKey]
+  if not action or type(action.run) ~= "function" then return false end
+
+  local tm = timeMs()
+  if tm < toNumber(comboIconHotkeyLastAt[actionKey], 0) + 250 then return true end
+  comboIconHotkeyLastAt[actionKey] = tm
+
+  action.run(action.icon)
+  return true
+end
+
+local function setupComboIconHotkey(icon, actionKey, run)
+  if not icon then return end
+
+  comboIconHotkeyActions[actionKey] = {icon = icon, run = run}
+  updateComboIconHotkeyTooltip(actionKey)
+
+  local oldRelease = icon.onMouseRelease
+  icon.onMouseRelease = function(widget, mousePos, button)
+    if isRightMouseButton(button) then
+      return startComboIconHotkeyCapture(actionKey)
+    end
+    if oldRelease then return oldRelease(widget, mousePos, button) == true end
+    return false
+  end
+end
+
+if type(onKeyDown) == "function" then
+  onKeyDown(function(keys)
+    local hotkey = normalizeComboIconHotkey(keys)
+    if not hotkey then return end
+
+    if comboIconHotkeyCapture then
+      local actionKey = comboIconHotkeyCapture
+      comboIconHotkeyCapture = nil
+
+      if hotkey == "ESCAPE" or hotkey == "ESC" then
+        comboIconHotkeyMessage("Bind cancelado.")
+        return true
+      end
+
+      if hotkey == "DELETE" or hotkey == "BACKSPACE" then
+        removeComboIconHotkey(actionKey)
+        return true
+      end
+
+      bindComboIconHotkey(actionKey, hotkey)
+      return true
+    end
+
+    for _, actionKey in ipairs(comboIconHotkeyOrder) do
+      if normalizeComboIconHotkey(settings.iconHotkeys[actionKey]) == hotkey then
+        return triggerComboIconHotkey(actionKey)
+      end
+    end
+  end)
+end
+
 if type(addIcon) == "function" then
   local targetIcon = addIcon("EspartanosCallTarget", {
     item = MAGIC_LONGSWORD_ID,
@@ -3209,6 +3355,11 @@ if type(addIcon) == "function" then
     targetIcon:breakAnchors()
     targetIcon:move(315, 70)
   end
+  setupComboIconHotkey(targetIcon, "callTarget", function(icon)
+    local enabled = callTargetIconEnabled ~= true
+    callComboTargetIcon(icon, enabled)
+    setIconOnSafe(icon, enabled)
+  end)
 
   local comboIcon = addIcon("EspartanosEnviarCombo", {
     item = GIANT_SWORD_ID,
@@ -3223,6 +3374,10 @@ if type(addIcon) == "function" then
     comboIcon:breakAnchors()
     comboIcon:move(315, 120)
   end
+  setupComboIconHotkey(comboIcon, "sendCombo", function(icon)
+    callComboSpellIcon(icon, true)
+    setIconOnSafe(icon, true)
+  end)
 
   local trapIcon = addIcon("EspartanosTrapTarget", {
     item = 3180,
@@ -3237,6 +3392,10 @@ if type(addIcon) == "function" then
     trapIcon:breakAnchors()
     trapIcon:move(315, 170)
   end
+  setupComboIconHotkey(trapIcon, "trapTarget", function(icon)
+    callTrapTargetIcon(icon, true)
+    setIconOnSafe(icon, true)
+  end)
 end
 
 macro(100, function()

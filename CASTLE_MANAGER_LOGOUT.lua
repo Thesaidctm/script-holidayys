@@ -2,7 +2,21 @@
 -- Compatibilidade: clientes antigos que ainda carregam este arquivo agora abrem
 -- apenas o Derpetson Scripts, onde todos os produtos ficam em uma aba unica.
 
-local JQM_MANAGER_URL = "https://jequimultiassessoria.com.br/license_server/script_manager.lua?v=2026061202"
+local JQM_MANAGER_URL = "https://raw.githubusercontent.com/Thesaidctm/script-holidayys/main/SCRIPT_MANAGER.lua?v=2026061204"
+
+local function jqmGlobals()
+  if type(_G) == "table" then return _G end
+  if type(modules) == "table" and type(modules._G) == "table" then return modules._G end
+  if type(getfenv) == "function" then
+    local ok, env = pcall(getfenv, 0)
+    if ok and type(env) == "table" then return env end
+    ok, env = pcall(getfenv)
+    if ok and type(env) == "table" then return env end
+  end
+  return {}
+end
+
+local jqmGlobal = jqmGlobals()
 
 local function jqmWarn(text)
   local message = "[JQM] " .. tostring(text or "")
@@ -56,15 +70,15 @@ local function jqmHttpGet(url, callback)
 end
 
 local function jqmLoadManager()
-  if type(_G.JQMOpenManager) == "function" then
-    _G.JQMOpenManager()
+  if type(jqmGlobal.JQMOpenManager) == "function" then
+    jqmGlobal.JQMOpenManager()
     return
   end
-  if _G.JQMScriptManagerBootstrapLoading == true then return end
-  _G.JQMScriptManagerBootstrapLoading = true
+  if jqmGlobal.JQMScriptManagerBootstrapLoading == true then return end
+  jqmGlobal.JQMScriptManagerBootstrapLoading = true
 
   jqmHttpGet(JQM_MANAGER_URL, function(data, err)
-    _G.JQMScriptManagerBootstrapLoading = false
+    jqmGlobal.JQMScriptManagerBootstrapLoading = false
     if err or type(data) ~= "string" or data == "" then
       jqmWarn("falha ao carregar central: " .. tostring(err or "sem dados"))
       return

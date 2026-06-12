@@ -2,20 +2,33 @@
 -- Este arquivo nao contem os scripts reais. Ele envia o MAC/HWID para aprovacao
 -- e baixa do servidor somente os scripts liberados no painel.
 
-local JQM_MANAGER_VERSION = 2026061202
-if _G.JQMScriptManagerVersion == JQM_MANAGER_VERSION then
-  if type(_G.JQMOpenManager) == "function" then _G.JQMOpenManager() end
+local function jqmGlobals()
+  if type(_G) == "table" then return _G end
+  if type(modules) == "table" and type(modules._G) == "table" then return modules._G end
+  if type(getfenv) == "function" then
+    local ok, env = pcall(getfenv, 0)
+    if ok and type(env) == "table" then return env end
+    ok, env = pcall(getfenv)
+    if ok and type(env) == "table" then return env end
+  end
+  return {}
+end
+
+local jqmGlobal = jqmGlobals()
+local JQM_MANAGER_VERSION = 2026061204
+if jqmGlobal.JQMScriptManagerVersion == JQM_MANAGER_VERSION then
+  if type(jqmGlobal.JQMOpenManager) == "function" then jqmGlobal.JQMOpenManager() end
   return
 end
-_G.JQMScriptManagerVersion = JQM_MANAGER_VERSION
+jqmGlobal.JQMScriptManagerVersion = JQM_MANAGER_VERSION
 
 local emblemId = 3
 local JQM_LICENSE_SERVER = "https://jequimultiassessoria.com.br/license_server/api.php"
 local JQM_PENDING_MESSAGE = "AGUARDANDO LIBERACAO MANDE MENSAGEM NO WHATSAPP PARA 33 999987736"
-local JQM_MANAGER_TAB = "Derpetson Scripts"
+local JQM_MANAGER_TAB = "Main"
 local jqmOriginalSetDefaultTab = setDefaultTab
-local jqmRuntimeLoaded = type(_G.JQMScriptManagerRuntimeLoaded) == "table" and _G.JQMScriptManagerRuntimeLoaded or {}
-_G.JQMScriptManagerRuntimeLoaded = jqmRuntimeLoaded
+local jqmRuntimeLoaded = type(jqmGlobal.JQMScriptManagerRuntimeLoaded) == "table" and jqmGlobal.JQMScriptManagerRuntimeLoaded or {}
+jqmGlobal.JQMScriptManagerRuntimeLoaded = jqmRuntimeLoaded
 
 local JQM_SCRIPTS = {
   { name = "combo", label = "Combo System", desc = "Foco, runas e prioridades" },
@@ -135,9 +148,14 @@ local function jqmRefreshManagerUi()
   jqmSetText(jqmWindowControl("status"), jqmSelectedSummary())
 end
 
-local function jqmToggleSelected(scriptName)
-  storage.JQMScriptManager.selected[scriptName] = not storage.JQMScriptManager.selected[scriptName]
+local jqmRequestSingle = nil
+
+local function jqmActivateSelected(scriptName)
+  storage.JQMScriptManager.selected[scriptName] = true
   jqmRefreshManagerUi()
+  if type(jqmRequestSingle) == "function" then
+    jqmRequestSingle(scriptName)
+  end
 end
 
 local function jqmSetAllSelected(value)
@@ -180,7 +198,7 @@ local function jqmPlayerName()
 end
 
 local function jqmTryCall(path)
-  local current = _G
+  local current = jqmGlobal
   for part in tostring(path):gmatch("[^%.]+") do
     if type(current) ~= "table" and type(current) ~= "userdata" then return nil end
     current = current[part]
@@ -357,7 +375,7 @@ local function jqmRunPayload(scriptName, data)
     return false
   end
   if jqmRuntimeLoaded[scriptName] == true then
-    jqmSetManagerStatus("Ja carregado na aba " .. JQM_MANAGER_TAB)
+    jqmSetManagerStatus("Ja carregado")
     jqmWarn("ja carregado: " .. jqmScriptLabel(scriptName))
     return true
   end
@@ -373,7 +391,7 @@ local function jqmRunPayload(scriptName, data)
   end
   jqmRuntimeLoaded[scriptName] = true
   storage.JQMScriptManager.loaded[scriptName] = true
-  jqmSetManagerStatus("Carregado na aba " .. JQM_MANAGER_TAB)
+  jqmSetManagerStatus("Carregado no painel")
   jqmWarn("carregado: " .. jqmScriptLabel(scriptName))
   return true
 end
@@ -434,6 +452,43 @@ local function jqmRequestOrLoad()
   end)
 end
 
+jqmRequestSingle = function(scriptName)
+  if scriptName == nil or scriptName == "" then return end
+  storage.JQMScriptManager.selected[scriptName] = true
+  jqmRefreshManagerUi()
+
+  if jqmRuntimeLoaded[scriptName] == true then
+    jqmSetManagerStatus("Ja carregado")
+    jqmWarn("ja carregado: " .. jqmScriptLabel(scriptName))
+    return
+  end
+
+  jqmSetManagerStatus("Carregando " .. jqmScriptLabel(scriptName) .. "...")
+  jqmHttpGet(jqmBuildUrl("request", { scripts = scriptName }), function(data, err)
+    if err or not data then
+      jqmSetManagerStatus("Aguardando liberacao")
+      jqmWarn(JQM_PENDING_MESSAGE)
+      return
+    end
+
+    if data:find('"ok":true', 1, true) or data:find('"ok": true', 1, true) then
+      local allowed = jqmScriptsFromResponse(data)
+      for _, allowedName in ipairs(allowed) do
+        if allowedName == scriptName then
+          JQMLoadScript(scriptName)
+          return
+        end
+      end
+      jqmSetManagerStatus("Sem liberacao para " .. jqmScriptLabel(scriptName))
+      jqmWarn("script ainda nao liberado para este MAC.")
+      return
+    end
+
+    jqmSetManagerStatus("Aguardando liberacao")
+    jqmWarn(JQM_PENDING_MESSAGE)
+  end)
+end
+
 local function jqmLoadManagerUi()
   if jqmUiLoaded then return true end
   if not g_ui or not g_ui.loadUIFromString then return false end
@@ -457,7 +512,7 @@ DerpetsonScriptHubPanel < Panel
     text-align: center
     color: #ffd36b
     font: verdana-11px-bold
-    text: Derpetson Scripts
+    text: Derpetson
 
   Label
     id: subtitle
@@ -470,7 +525,7 @@ DerpetsonScriptHubPanel < Panel
     text-align: center
     color: #dce4ee
     font: verdana-11px
-    text: central de acesso
+    text: scripts
 
   Label
     id: status
@@ -483,7 +538,7 @@ DerpetsonScriptHubPanel < Panel
     text-align: center
     color: #7ee8a8
     font: verdana-11px-bold
-    text: Escolha os scripts
+    text: Selecionar
 
   Button
     id: open
@@ -492,7 +547,7 @@ DerpetsonScriptHubPanel < Panel
     width: 52
     height: 64
     text-align: center
-    text: Central
+    text: Abrir
 
 DerpetsonScriptsWindow < MainWindow
   text: Derpetson Scripts
@@ -531,7 +586,7 @@ DerpetsonScriptsWindow < MainWindow
       text-align: center
       color: #e8edf4
       font: verdana-11px
-      text: Selecione, carregue e configure pelo Setup de cada produto
+      text: Clique no produto para carregar e depois configure no Setup
 
     Label
       id: status
@@ -652,7 +707,7 @@ DerpetsonScriptsWindow < MainWindow
       text-align: center
       color: #dce4ee
       font: verdana-11px
-      text: 1. Marque os scripts comprados e clique em Carregar.
+      text: 1. Clique no produto verde para carregar na hora.
 
     Label
       id: helpLine2
@@ -664,7 +719,7 @@ DerpetsonScriptsWindow < MainWindow
       text-align: center
       color: #9fb2c4
       font: verdana-11px
-      text: 2. Tudo carregado fica agrupado nesta aba do bot.
+      text: 2. Use Limpar apenas para desmarcar a selecao.
 
   Panel
     id: footer
@@ -698,7 +753,7 @@ DerpetsonScriptsWindow < MainWindow
       margin-left: 5
       margin-right: 5
       height: 24
-      text: Carregar selecionados
+      text: Carregar todos
 
     Button
       id: closeButton
@@ -735,19 +790,22 @@ local function jqmCreateWindow()
     jqmWindowControl("confirmButton").onClick = jqmRequestOrLoad
   end
   if jqmWindowControl("allButton") then
-    jqmWindowControl("allButton").onClick = function() jqmSetAllSelected(true) end
+    jqmWindowControl("allButton").onClick = function()
+      jqmSetAllSelected(true)
+      jqmRequestOrLoad()
+    end
   end
   if jqmWindowControl("clearButton") then
     jqmWindowControl("clearButton").onClick = function() jqmSetAllSelected(false) end
   end
   if jqmWindowControl("comboSwitch") then
-    jqmWindowControl("comboSwitch").onClick = function() jqmToggleSelected("combo") end
+    jqmWindowControl("comboSwitch").onClick = function() jqmActivateSelected("combo") end
   end
   if jqmWindowControl("holidaySwitch") then
-    jqmWindowControl("holidaySwitch").onClick = function() jqmToggleSelected("holiday_aoe") end
+    jqmWindowControl("holidaySwitch").onClick = function() jqmActivateSelected("holiday_aoe") end
   end
   if jqmWindowControl("castleSwitch") then
-    jqmWindowControl("castleSwitch").onClick = function() jqmToggleSelected("castle_manager") end
+    jqmWindowControl("castleSwitch").onClick = function() jqmActivateSelected("castle_manager") end
   end
 
   jqmRefreshManagerUi()
@@ -787,4 +845,4 @@ elseif UI and UI.Button then
   UI.Button("Derpetson Scripts", jqmOpenManager, jqmEnsureManagerTab())
 end
 
-_G.JQMOpenManager = jqmOpenManager
+jqmGlobal.JQMOpenManager = jqmOpenManager

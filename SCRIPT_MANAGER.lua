@@ -15,7 +15,7 @@ local function jqmGlobals()
 end
 
 local jqmGlobal = jqmGlobals()
-local JQM_MANAGER_VERSION = 2026061205
+local JQM_MANAGER_VERSION = 2026061206
 if jqmGlobal.JQMScriptManagerVersion == JQM_MANAGER_VERSION then
   if type(jqmGlobal.JQMOpenManager) == "function" then jqmGlobal.JQMOpenManager() end
   return
@@ -44,8 +44,10 @@ local JQM_SWITCH_IDS = {
 
 local jqmWindow = nil
 local jqmLauncher = nil
+local jqmScriptHost = nil
 local jqmUiLoaded = false
 local jqmManagerTab = nil
+local jqmLoadManagerUi = nil
 
 local function jqmEnsureManagerTab()
   if jqmManagerTab then return jqmManagerTab end
@@ -310,11 +312,30 @@ local function jqmBuildUrl(action, extra)
   return JQM_LICENSE_SERVER .. "?" .. table.concat(parts, "&")
 end
 
+local function jqmEnsureScriptHost()
+  if jqmScriptHost then return jqmScriptHost end
+  if not jqmLoadManagerUi() or not UI or not UI.createWidget then return jqmEnsureManagerTab() end
+
+  local ok, host = pcall(function()
+    return UI.createWidget("DerpetsonLoadedScriptsPanel", jqmEnsureManagerTab())
+  end)
+  if ok and host then
+    jqmScriptHost = host
+    return jqmScriptHost
+  end
+  return jqmEnsureManagerTab()
+end
+
 local function jqmRunInManagerTab(fn)
   local originalSetDefaultTab = setDefaultTab
   local originalGetTab = getTab
+  local originalSetupUI = setupUI
+  local originalUIButton = UI and UI.Button
+  local originalUISeparator = UI and UI.Separator
+  local originalUILabel = UI and UI.Label
+  local originalUITextEdit = UI and UI.TextEdit
   local originalParent = parent
-  local managerTab = jqmEnsureManagerTab()
+  local host = jqmEnsureScriptHost()
 
   local function selectManagerTab()
     local tab = nil
@@ -323,11 +344,12 @@ local function jqmRunInManagerTab(fn)
       if ok and value then tab = value end
     end
     if not tab then tab = jqmEnsureManagerTab() end
-    if tab then
-      jqmManagerTab = tab
-      parent = tab
+    jqmManagerTab = tab or jqmManagerTab
+    host = jqmEnsureScriptHost() or tab
+    if host then
+      parent = host
     end
-    return tab
+    return host or tab
   end
 
   local function forcedGetTab()
@@ -348,6 +370,33 @@ local function jqmRunInManagerTab(fn)
   if type(originalGetTab) == "function" then
     getTab = forcedGetTab
   end
+  if type(originalSetupUI) == "function" then
+    setupUI = function(layout, dest)
+      return originalSetupUI(layout, dest or host or jqmEnsureScriptHost())
+    end
+  end
+  if type(UI) == "table" then
+    if type(originalUIButton) == "function" then
+      UI.Button = function(text, callback, dest)
+        return originalUIButton(text, callback, dest or host or jqmEnsureScriptHost())
+      end
+    end
+    if type(originalUISeparator) == "function" then
+      UI.Separator = function(dest)
+        return originalUISeparator(dest or host or jqmEnsureScriptHost())
+      end
+    end
+    if type(originalUILabel) == "function" then
+      UI.Label = function(text, dest)
+        return originalUILabel(text, dest or host or jqmEnsureScriptHost())
+      end
+    end
+    if type(originalUITextEdit) == "function" then
+      UI.TextEdit = function(text, callback, dest)
+        return originalUITextEdit(text, callback, dest or host or jqmEnsureScriptHost())
+      end
+    end
+  end
   selectManagerTab()
 
   local ok, err = pcall(fn)
@@ -357,6 +406,15 @@ local function jqmRunInManagerTab(fn)
   end
   if type(originalGetTab) == "function" then
     getTab = originalGetTab
+  end
+  if type(originalSetupUI) == "function" then
+    setupUI = originalSetupUI
+  end
+  if type(UI) == "table" then
+    if type(originalUIButton) == "function" then UI.Button = originalUIButton end
+    if type(originalUISeparator) == "function" then UI.Separator = originalUISeparator end
+    if type(originalUILabel) == "function" then UI.Label = originalUILabel end
+    if type(originalUITextEdit) == "function" then UI.TextEdit = originalUITextEdit end
   end
   parent = originalParent
 
@@ -499,7 +557,7 @@ jqmRequestSingle = function(scriptName)
   end)
 end
 
-local function jqmLoadManagerUi()
+jqmLoadManagerUi = function()
   if jqmUiLoaded then return true end
   if not g_ui or not g_ui.loadUIFromString then return false end
 
@@ -558,6 +616,23 @@ DerpetsonScriptHubPanel < Panel
     height: 64
     text-align: center
     text: Abrir
+
+DerpetsonLoadedScriptsPanel < Panel
+  margin-top: 2
+  padding: 3
+  image-source: /images/ui/panel_flat
+  image-border: 5
+  layout:
+    type: verticalBox
+    fit-children: true
+
+  Label
+    id: title
+    height: 15
+    text-align: center
+    color: #ffd36b
+    font: verdana-11px-bold
+    text: Scripts carregados
 
 DerpetsonScriptsWindow < MainWindow
   text: Derpetson Scripts

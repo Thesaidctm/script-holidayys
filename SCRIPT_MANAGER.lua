@@ -15,7 +15,7 @@ local function jqmGlobals()
 end
 
 local jqmGlobal = jqmGlobals()
-local JQM_MANAGER_VERSION = 2026061213
+local JQM_MANAGER_VERSION = 2026061214
 if jqmGlobal.JQMScriptManagerVersion == JQM_MANAGER_VERSION then
   if type(jqmGlobal.JQMOpenManager) == "function" then jqmGlobal.JQMOpenManager() end
   return
@@ -40,6 +40,126 @@ local JQM_SCRIPTS = {
   { name = "holiday_aoe", label = "HOLIDAY AOE", short = "HOLIDAY AOE", file = "holiday_aoe.lua", desc = "Area, combo e PvP", category = "DEFESA", icon = "DEF" }
 }
 
+local JQM_MODULES = {
+  {
+    key = "combo_espart",
+    script = "combo",
+    prefix = "combo",
+    category = "COMBATE",
+    icon = "ATK",
+    label = "COMBO ESPART",
+    file = "COMBO_ESPART_V3.lua",
+    desc = "Delay, caller, runas e prioridades",
+    defaults = {
+      enabled = false,
+      delay = "250",
+      caller = "",
+      cooldowns = "auto",
+      spells = "auto",
+      priority = "menor hp",
+      advanced = false,
+      pvp = true
+    },
+    fields = {
+      { key = "delay", label = "Delay de Combo", kind = "text" },
+      { key = "caller", label = "Caller", kind = "text" },
+      { key = "cooldowns", label = "Cooldowns", kind = "text" },
+      { key = "spells", label = "Lista de Magias", kind = "text" },
+      { key = "priority", label = "Prioridades", kind = "text" },
+      { key = "advanced", label = "Opcoes avancadas", kind = "bool" },
+      { key = "pvp", label = "PVP", kind = "bool" }
+    }
+  },
+  {
+    key = "smart_pvp",
+    script = nil,
+    prefix = "smart",
+    category = "COMBATE",
+    icon = "PVP",
+    label = "SMART PVP",
+    file = "Hub interno",
+    desc = "Anti push, SSA, ring e trap",
+    defaults = {
+      enabled = false,
+      antiPush = true,
+      ssa = true,
+      mightRing = true,
+      magicWall = true,
+      antiTrap = true,
+      antiKs = false
+    },
+    fields = {
+      { key = "antiPush", label = "Anti Push", kind = "bool" },
+      { key = "ssa", label = "SSA", kind = "bool" },
+      { key = "mightRing", label = "Might Ring", kind = "bool" },
+      { key = "magicWall", label = "Magic Wall", kind = "bool" },
+      { key = "antiTrap", label = "Anti Trap", kind = "bool" },
+      { key = "antiKs", label = "Anti KS", kind = "bool" }
+    }
+  },
+  {
+    key = "castle_pro",
+    script = "castle_manager",
+    prefix = "castle",
+    category = "CASTLE",
+    icon = "CST",
+    label = "CASTLE PRO",
+    file = "CASTLE_MANAGER_LOGOUT.lua",
+    desc = "Areas, whitelist e seguranca",
+    defaults = {
+      enabled = false,
+      areas = "",
+      whitelist = "",
+      logout = true,
+      cavebot = true,
+      antiInvasao = true
+    },
+    fields = {
+      { key = "areas", label = "Lista de Areas", kind = "text" },
+      { key = "whitelist", label = "Whitelist", kind = "text" },
+      { key = "logout", label = "Logout", kind = "bool" },
+      { key = "cavebot", label = "Cavebot", kind = "bool" },
+      { key = "antiInvasao", label = "Anti Invasao", kind = "bool" }
+    }
+  },
+  {
+    key = "holiday_aoe",
+    script = "holiday_aoe",
+    prefix = "holiday",
+    category = "DEFESA",
+    icon = "DEF",
+    label = "HOLIDAY AOE",
+    file = "holiday_aoe.lua",
+    desc = "Magias, monstros e safe mode",
+    defaults = {
+      enabled = false,
+      spells = "auto",
+      cooldowns = "auto",
+      priority = "menor hp",
+      monsters = "3",
+      safeMode = true,
+      enableWave = true,
+      enableMageArea = true,
+      enablePvpStrongArea = true
+    },
+    fields = {
+      { key = "spells", label = "Magias", kind = "text" },
+      { key = "cooldowns", label = "Cooldowns", kind = "text" },
+      { key = "priority", label = "Prioridades", kind = "text" },
+      { key = "monsters", label = "Monstros minimos", kind = "text" },
+      { key = "safeMode", label = "Safe Mode", kind = "bool" },
+      { key = "enableWave", label = "Usar Wave", kind = "bool" },
+      { key = "enableMageArea", label = "Area Mage", kind = "bool" },
+      { key = "enablePvpStrongArea", label = "Area PvP extra", kind = "bool" }
+    }
+  }
+}
+
+local JQM_MODULE_BY_KEY = {}
+for _, module in ipairs(JQM_MODULES) do
+  JQM_MODULE_BY_KEY[module.key] = module
+end
+
 local JQM_SWITCH_IDS = {
   combo = "comboCard",
   holiday_aoe = "holidayCard",
@@ -56,8 +176,11 @@ local jqmWindow = nil
 local jqmLauncher = nil
 local jqmUiLoaded = false
 local jqmManagerTab = nil
+local jqmPayloadSink = nil
 local jqmLoadedRows = {}
 local jqmOpenManager = nil
+local jqmRefreshManagerUi = nil
+local jqmActivateSelected = nil
 
 local function jqmEnsureManagerTab()
   if jqmManagerTab then return jqmManagerTab end
@@ -77,6 +200,22 @@ end
 
 jqmEnsureManagerTab()
 
+local function jqmEnsurePayloadSink()
+  if jqmPayloadSink then return jqmPayloadSink end
+  local tab = jqmEnsureManagerTab()
+  if UI and UI.createWidget and tab then
+    local ok, panel = pcall(function() return UI.createWidget("Panel", tab) end)
+    if ok and panel then
+      jqmPayloadSink = panel
+      if panel.setHeight then pcall(function() panel:setHeight(0) end) end
+      if panel.setVisible then pcall(function() panel:setVisible(false) end) end
+      if panel.hide then pcall(function() panel:hide() end) end
+      return jqmPayloadSink
+    end
+  end
+  return tab
+end
+
 local function jqmWindowControl(id)
   if not jqmWindow then return nil end
   if jqmWindow[id] then return jqmWindow[id] end
@@ -84,7 +223,7 @@ local function jqmWindowControl(id)
     local ok, widget = pcall(function() return jqmWindow:recursiveGetChildById(id) end)
     if ok and widget then return widget end
   end
-  for _, parentId in ipairs({ "headerPanel", "listPanel", "helpPanel", "footer" }) do
+  for _, parentId in ipairs({ "headerPanel", "dashboardPanel", "sidebarPanel", "detailPanel", "configPanel", "listPanel", "helpPanel", "footer" }) do
     local panel = jqmWindow[parentId]
     if panel and panel[id] then return panel[id] end
   end
@@ -94,8 +233,12 @@ end
 storage.JQMScriptManager = type(storage.JQMScriptManager) == "table" and storage.JQMScriptManager or {}
 storage.JQMScriptManager.selected = type(storage.JQMScriptManager.selected) == "table" and storage.JQMScriptManager.selected or {}
 storage.JQMScriptManager.loaded = type(storage.JQMScriptManager.loaded) == "table" and storage.JQMScriptManager.loaded or {}
+storage.JQMScriptManager.modules = type(storage.JQMScriptManager.modules) == "table" and storage.JQMScriptManager.modules or {}
+storage.JQMScriptManager.activeModule = storage.JQMScriptManager.activeModule or "combo_espart"
+storage.JQMScriptManager.lastUpdate = storage.JQMScriptManager.lastUpdate or ""
 storage.Combo = type(storage.Combo) == "table" and storage.Combo or {}
 storage.Combo.licenseKey = storage.Combo.licenseKey or ""
+local JQM_AOE_STORAGE = "holiday_aoe_vocation_v10_ek_gran_only"
 
 local function jqmSetText(widget, text)
   if widget and widget.setText then
@@ -122,6 +265,171 @@ local function jqmSetBackground(widget, color)
     pcall(function() widget:setBackgroundColor(color) end)
   elseif widget and widget.setImageColor then
     pcall(function() widget:setImageColor(color) end)
+  end
+end
+
+local function jqmSetVisible(widget, visible)
+  if not widget then return end
+  if visible == false then
+    if widget.hide then
+      pcall(function() widget:hide() end)
+    elseif widget.setVisible then
+      pcall(function() widget:setVisible(false) end)
+    end
+  else
+    if widget.show then
+      pcall(function() widget:show() end)
+    elseif widget.setVisible then
+      pcall(function() widget:setVisible(true) end)
+    end
+  end
+end
+
+local function jqmTouchUpdate()
+  storage.JQMScriptManager.lastUpdate = os and os.date and os.date("%H:%M:%S") or "agora"
+end
+
+local function jqmCopyDefaults(defaults)
+  local copy = {}
+  for key, value in pairs(defaults or {}) do
+    copy[key] = value
+  end
+  return copy
+end
+
+local function jqmModuleData(moduleKey)
+  storage.JQMScriptManager.modules = type(storage.JQMScriptManager.modules) == "table" and storage.JQMScriptManager.modules or {}
+  local data = storage.JQMScriptManager.modules[moduleKey]
+  if type(data) ~= "table" then
+    data = {}
+    storage.JQMScriptManager.modules[moduleKey] = data
+  end
+  local def = JQM_MODULE_BY_KEY[moduleKey]
+  if type(data.config) ~= "table" then
+    data.config = jqmCopyDefaults(def and def.defaults or {})
+  end
+  if def and type(def.defaults) == "table" then
+    for key, value in pairs(def.defaults) do
+      if data.config[key] == nil then data.config[key] = value end
+    end
+  end
+  if data.enabled == nil and data.config.enabled ~= nil then
+    data.enabled = data.config.enabled == true
+  end
+  return data
+end
+
+local function jqmBoolText(value)
+  return value == true and "ON" or "OFF"
+end
+
+local function jqmValueText(value)
+  if value == true or value == false then return jqmBoolText(value) end
+  return tostring(value or "")
+end
+
+local function jqmComboStorage()
+  storage.Combo = type(storage.Combo) == "table" and storage.Combo or {}
+  return storage.Combo
+end
+
+local function jqmAoeStorage()
+  storage[JQM_AOE_STORAGE] = type(storage[JQM_AOE_STORAGE]) == "table" and storage[JQM_AOE_STORAGE] or {}
+  return storage[JQM_AOE_STORAGE]
+end
+
+local function jqmApplyModuleConfig(module, fieldKey, value)
+  if not module then return end
+  if module.key == "combo_espart" then
+    local combo = jqmComboStorage()
+    if fieldKey == "enabled" then combo.enabled = value == true end
+    if fieldKey == "caller" then combo.chatName = tostring(value or "") end
+    if fieldKey == "priority" then combo.jqmPriority = tostring(value or "") end
+    if fieldKey == "pvp" then combo.jqmPvp = value == true end
+    if fieldKey == "advanced" then combo.jqmAdvanced = value == true end
+    if fieldKey == "delay" then combo.jqmDelay = tostring(value or "") end
+    if fieldKey == "cooldowns" then combo.jqmCooldowns = tostring(value or "") end
+    if fieldKey == "spells" then combo.jqmSpells = tostring(value or "") end
+    return
+  end
+
+  if module.key == "holiday_aoe" then
+    local aoe = jqmAoeStorage()
+    if fieldKey == "enabled" then aoe.enabled = value == true end
+    if fieldKey == "safeMode" then aoe.enableDefense = value == true end
+    if fieldKey == "enableWave" then aoe.enableWave = value == true end
+    if fieldKey == "enableMageArea" then aoe.enableMageArea = value == true end
+    if fieldKey == "enablePvpStrongArea" then aoe.enablePvpStrongArea = value == true end
+    if fieldKey == "monsters" then
+      local n = tonumber(value)
+      if n then
+        aoe.minWaveMobs = n
+        aoe.minAreaMsEd = n
+        aoe.minAreaRp = n
+        aoe.minEkGran = n
+      end
+    end
+    if fieldKey == "cooldowns" then aoe.jqmCooldowns = tostring(value or "") end
+    if fieldKey == "spells" then aoe.jqmSpells = tostring(value or "") end
+    if fieldKey == "priority" then aoe.jqmPriority = tostring(value or "") end
+    return
+  end
+
+  if module.key == "smart_pvp" then
+    storage.JQMSmartPVP = type(storage.JQMSmartPVP) == "table" and storage.JQMSmartPVP or {}
+    storage.JQMSmartPVP[fieldKey] = value
+    return
+  end
+
+  if module.key == "castle_pro" then
+    storage.JQMCastlePro = type(storage.JQMCastlePro) == "table" and storage.JQMCastlePro or {}
+    storage.JQMCastlePro[fieldKey] = value
+  end
+end
+
+local function jqmModuleRuntimeActive(module)
+  if not module then return false end
+  return jqmModuleData(module.key).enabled == true
+end
+
+for _, module in ipairs(JQM_MODULES) do
+  function module:getStatus()
+    local data = jqmModuleData(self.key)
+    if data.paused == true then
+      return "Pausado", "#ffd36b", "#2d2617dd", "#fff0c0"
+    end
+    if jqmModuleRuntimeActive(self) then
+      return "Ativo", "#76ff9f", "#183820dd", "#e8fff0"
+    end
+    return "Inativo", "#ff7676", "#171b22dd", "#cfd8e3"
+  end
+
+  function module:getConfig()
+    return jqmModuleData(self.key).config
+  end
+
+  function module:saveConfig(fieldKey, value)
+    local data = jqmModuleData(self.key)
+    data.config[fieldKey] = value
+    if fieldKey == "enabled" then data.enabled = value == true end
+    jqmApplyModuleConfig(self, fieldKey, value)
+    jqmTouchUpdate()
+  end
+
+  function module:setEnabled(value)
+    local enabled = value == true
+    local data = jqmModuleData(self.key)
+    data.enabled = enabled
+    data.config.enabled = enabled
+    data.paused = false
+    if self.script then storage.JQMScriptManager.selected[self.script] = enabled end
+    jqmApplyModuleConfig(self, "enabled", enabled)
+    jqmTouchUpdate()
+    if enabled and self.script and type(jqmActivateSelected) == "function" then
+      jqmActivateSelected(self.script)
+    elseif type(jqmRefreshManagerUi) == "function" then
+      jqmRefreshManagerUi()
+    end
   end
 end
 
@@ -187,24 +495,45 @@ local function jqmScriptItem(scriptName)
   return nil
 end
 
-local function jqmModuleStatus(scriptName)
-  if jqmRuntimeLoaded[scriptName] == true then
-    return "Ativo", "#76ff9f", "#183820dd", "#dfffeb"
-  end
-  if storage.JQMScriptManager.selected[scriptName] == true then
-    return "Pausado", "#ffd36b", "#2d2617dd", "#ffe6a3"
-  end
-  return "Inativo", "#ff6f6f", "#171b22dd", "#cfd8e3"
-end
-
 local function jqmSetManagerStatus(text)
   jqmSetText(jqmLauncher and jqmLauncher.status, text)
   jqmSetText(jqmWindowControl("status"), text)
 end
 
-local function jqmUpdateModuleCard(item, hover)
-  if not item then return end
-  local prefix = JQM_CARD_PREFIX[item.name]
+local function jqmActiveModule()
+  local module = JQM_MODULE_BY_KEY[storage.JQMScriptManager.activeModule]
+  if module then return module end
+  storage.JQMScriptManager.activeModule = "combo_espart"
+  return JQM_MODULE_BY_KEY.combo_espart
+end
+
+local function jqmSyncLoadedModules()
+  for _, module in ipairs(JQM_MODULES) do
+    if module.script and jqmRuntimeLoaded[module.script] == true then
+      local data = jqmModuleData(module.key)
+      data.runtimeLoaded = true
+    end
+  end
+end
+
+local function jqmDashboardCounts()
+  local active, inactive, paused = 0, 0, 0
+  for _, module in ipairs(JQM_MODULES) do
+    local status = module:getStatus()
+    if status == "Ativo" then
+      active = active + 1
+    elseif status == "Pausado" then
+      paused = paused + 1
+    else
+      inactive = inactive + 1
+    end
+  end
+  return active, inactive, paused
+end
+
+local function jqmUpdateModuleCard(module, hover)
+  if not module then return end
+  local prefix = module.prefix
   if not prefix then return end
 
   local card = jqmWindowControl(prefix .. "Card")
@@ -212,38 +541,126 @@ local function jqmUpdateModuleCard(item, hover)
   local title = jqmWindowControl(prefix .. "Title")
   local desc = jqmWindowControl(prefix .. "Desc")
   local badge = jqmWindowControl(prefix .. "Badge")
+  local enable = jqmWindowControl(prefix .. "Enable")
   local gear = jqmWindowControl(prefix .. "Gear")
-  local statusText, statusColor, bgColor, titleColor = jqmModuleStatus(item.name)
+  local selected = storage.JQMScriptManager.activeModule == module.key
+  local statusText, statusColor, bgColor, titleColor = module:getStatus()
 
   if hover == true then
     bgColor = "#243041ee"
     titleColor = "#ffffff"
   end
+  if selected then
+    bgColor = "#273341ee"
+    titleColor = "#ffffff"
+  end
 
-  jqmSetText(icon, item.icon or "")
-  jqmSetText(title, item.label)
-  jqmSetText(desc, item.file or item.desc or "")
+  jqmSetText(icon, module.icon or "")
+  jqmSetText(title, module.label)
+  jqmSetText(desc, module.desc or module.file or "")
   jqmSetText(badge, statusText)
+  jqmSetText(enable, statusText == "Ativo" and "Desativar" or "Ativar")
+  jqmSetText(gear, "CFG")
   jqmSetColor(badge, statusColor)
   jqmSetColor(title, titleColor)
   jqmSetColor(icon, statusColor)
   jqmSetColor(desc, "#9fb2c4")
   jqmSetColor(gear, hover and "#ffd36b" or "#dce4ee")
+  jqmSetColor(enable, statusText == "Ativo" and "#76ff9f" or "#dce4ee")
   jqmSetBackground(card, bgColor)
 end
 
-local function jqmRefreshManagerUi()
-  for _, item in ipairs(JQM_SCRIPTS) do
-    jqmUpdateModuleCard(item, false)
+local jqmRowBindings = {}
+local jqmInputLocks = {}
+
+local function jqmSetInputText(inputId, text)
+  local input = jqmWindowControl(inputId)
+  jqmInputLocks[inputId] = true
+  jqmSetText(input, text)
+  jqmInputLocks[inputId] = false
+end
+
+local function jqmRefreshDashboard()
+  local active, inactive, paused = jqmDashboardCounts()
+  local ramText = "RAM: n/d"
+  if collectgarbage then
+    local ok, kb = pcall(function() return collectgarbage("count") end)
+    if ok and kb then ramText = string.format("RAM: %.1f MB", tonumber(kb) / 1024) end
   end
+  jqmSetText(jqmWindowControl("activeMetric"), "Ativos: " .. tostring(active))
+  jqmSetText(jqmWindowControl("inactiveMetric"), "Inativos: " .. tostring(inactive))
+  jqmSetText(jqmWindowControl("pausedMetric"), "Pausados: " .. tostring(paused))
+  jqmSetText(jqmWindowControl("cpuMetric"), "CPU: n/d")
+  jqmSetText(jqmWindowControl("ramMetric"), ramText)
+  jqmSetText(jqmWindowControl("updateMetric"), "Atualizado: " .. tostring(storage.JQMScriptManager.lastUpdate or "-"))
+end
+
+local function jqmRefreshDetailPanel()
+  local module = jqmActiveModule()
+  if not module then return end
+  local statusText, statusColor = module:getStatus()
+  local cfg = module:getConfig()
+  jqmSetText(jqmWindowControl("detailTitle"), module.label)
+  jqmSetText(jqmWindowControl("detailSubtitle"), module.desc or module.file or "")
+  jqmSetText(jqmWindowControl("detailBadge"), statusText)
+  jqmSetColor(jqmWindowControl("detailBadge"), statusColor)
+  jqmSetText(jqmWindowControl("detailLoad"), statusText == "Ativo" and "Desativar" or "Ativar")
+
+  for index = 1, 8 do
+    local field = module.fields and module.fields[index]
+    local row = jqmWindowControl("configRow" .. tostring(index))
+    local label = jqmWindowControl("configLabel" .. tostring(index))
+    local input = jqmWindowControl("configInput" .. tostring(index))
+    local action = jqmWindowControl("configAction" .. tostring(index))
+    jqmRowBindings[index] = field and { module = module, field = field } or nil
+    jqmSetVisible(row, field ~= nil)
+    if field then
+      local value = cfg[field.key]
+      jqmSetText(label, field.label)
+      jqmSetInputText("configInput" .. tostring(index), jqmValueText(value))
+      jqmSetText(action, field.kind == "bool" and "Alternar" or "OK")
+      jqmSetColor(input, field.kind == "bool" and (value == true and "#76ff9f" or "#ff7676") or "#e8edf4")
+    end
+  end
+end
+
+local function jqmSaveConfigInput(index, text)
+  local binding = jqmRowBindings[index]
+  if not binding or not binding.module or not binding.field then return end
+  if binding.field.kind == "bool" then return end
+  binding.module:saveConfig(binding.field.key, tostring(text or ""))
+  jqmRefreshDashboard()
+end
+
+local function jqmConfigAction(index)
+  local binding = jqmRowBindings[index]
+  if not binding or not binding.module or not binding.field then return end
+  local cfg = binding.module:getConfig()
+  if binding.field.kind == "bool" then
+    binding.module:saveConfig(binding.field.key, cfg[binding.field.key] ~= true)
+  else
+    local input = jqmWindowControl("configInput" .. tostring(index))
+    local value = input and input.getText and input:getText() or cfg[binding.field.key]
+    binding.module:saveConfig(binding.field.key, tostring(value or ""))
+  end
+  jqmRefreshManagerUi()
+end
+
+jqmRefreshManagerUi = function()
+  jqmSyncLoadedModules()
+  for _, module in ipairs(JQM_MODULES) do
+    jqmUpdateModuleCard(module, false)
+  end
+  jqmRefreshDashboard()
+  jqmRefreshDetailPanel()
   jqmSetText(jqmLauncher and jqmLauncher.status, jqmMainSummary())
-  jqmSetText(jqmWindowControl("status"), jqmSelectedSummary())
+  jqmSetText(jqmWindowControl("status"), "Hub central de gerenciamento")
 end
 
 local jqmRequestSingle = nil
 local jqmWarn = nil
 
-local function jqmActivateSelected(scriptName)
+jqmActivateSelected = function(scriptName)
   storage.JQMScriptManager.selected[scriptName] = true
   jqmRefreshManagerUi()
   if type(jqmRequestSingle) == "function" then
@@ -497,7 +914,7 @@ local function jqmPayloadEnv()
   local env = jqmGlobals()
   if type(env) ~= "table" then env = {} end
   env._G = env
-  env.parent = jqmEnsureManagerTab()
+  env.parent = jqmEnsurePayloadSink()
   return env
 end
 
@@ -525,9 +942,9 @@ local function jqmRunInManagerTab(fn)
     if not tab then tab = jqmEnsureManagerTab() end
     if tab then
       jqmManagerTab = tab
-      parent = tab
+      parent = jqmEnsurePayloadSink() or tab
     end
-    return tab
+    return parent or tab
   end
 
   local function forcedGetTab()
@@ -608,7 +1025,6 @@ local function jqmRunPayload(scriptName, data)
     return false
   end
   if jqmRuntimeLoaded[scriptName] == true then
-    jqmEnsureLoadedRow(scriptName)
     jqmSetManagerStatus("Ja carregado")
     jqmWarn("ja carregado: " .. jqmScriptLabel(scriptName))
     return true
@@ -625,8 +1041,17 @@ local function jqmRunPayload(scriptName, data)
   end
   jqmRuntimeLoaded[scriptName] = true
   storage.JQMScriptManager.loaded[scriptName] = true
-  jqmEnsureLoadedRow(scriptName)
+  for _, module in ipairs(JQM_MODULES) do
+    if module.script == scriptName then
+      local data = jqmModuleData(module.key)
+      data.enabled = true
+      data.config.enabled = true
+      data.runtimeLoaded = true
+      jqmApplyModuleConfig(module, "enabled", true)
+    end
+  end
   jqmSetManagerStatus(jqmMainSummary())
+  if type(jqmRefreshManagerUi) == "function" then jqmRefreshManagerUi() end
   jqmWarn("carregado: " .. jqmScriptLabel(scriptName))
   return true
 end
@@ -693,7 +1118,6 @@ jqmRequestSingle = function(scriptName)
   jqmRefreshManagerUi()
 
   if jqmRuntimeLoaded[scriptName] == true then
-    jqmEnsureLoadedRow(scriptName)
     jqmSetManagerStatus("Ja carregado")
     jqmWarn("ja carregado: " .. jqmScriptLabel(scriptName))
     return
@@ -1225,6 +1649,870 @@ DerpetsonScriptsWindow < MainWindow
       width: 62
       height: 24
       text: Fechar
+
+DerpetsonScriptsHubWindow < MainWindow
+  text: Derpetson Scripts
+  size: 620 555
+  padding: 10
+  @onEscape: self:hide()
+
+  Panel
+    id: headerPanel
+    anchors.top: parent.top
+    anchors.left: parent.left
+    anchors.right: parent.right
+    height: 58
+    image-source: /images/ui/panel_flat
+    image-border: 5
+    padding: 7
+    background-color: #101720ee
+
+    Label
+      id: title
+      anchors.top: parent.top
+      anchors.left: parent.left
+      anchors.right: parent.right
+      height: 17
+      text-align: center
+      color: #ffd36b
+      font: verdana-11px-bold
+      text: DERPETSON SCRIPTS
+
+    Label
+      id: subtitle
+      anchors.top: title.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      margin-top: 2
+      height: 14
+      text-align: center
+      color: #e8edf4
+      font: verdana-11px
+      text: Hub central de gerenciamento premium
+
+    Label
+      id: status
+      anchors.top: subtitle.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      margin-top: 2
+      height: 15
+      text-align: center
+      color: #7ee8a8
+      font: verdana-11px-bold
+      text: Hub central de gerenciamento
+
+  Panel
+    id: dashboardPanel
+    anchors.top: headerPanel.bottom
+    anchors.left: parent.left
+    anchors.right: parent.right
+    margin-top: 7
+    height: 50
+    image-source: /images/ui/panel_flat
+    image-border: 5
+    padding: 6
+    background-color: #131b26ee
+
+    Label
+      id: activeMetric
+      anchors.left: parent.left
+      anchors.top: parent.top
+      width: 94
+      height: 17
+      color: #76ff9f
+      font: verdana-11px-bold
+      text: Ativos: 0
+
+    Label
+      id: inactiveMetric
+      anchors.left: activeMetric.right
+      anchors.top: parent.top
+      margin-left: 8
+      width: 104
+      height: 17
+      color: #ff7676
+      font: verdana-11px-bold
+      text: Inativos: 0
+
+    Label
+      id: pausedMetric
+      anchors.left: inactiveMetric.right
+      anchors.top: parent.top
+      margin-left: 8
+      width: 104
+      height: 17
+      color: #ffd36b
+      font: verdana-11px-bold
+      text: Pausados: 0
+
+    Label
+      id: cpuMetric
+      anchors.left: parent.left
+      anchors.top: activeMetric.bottom
+      margin-top: 4
+      width: 94
+      height: 16
+      color: #cfd8e3
+      font: verdana-11px
+      text: CPU: n/d
+
+    Label
+      id: ramMetric
+      anchors.left: cpuMetric.right
+      anchors.top: activeMetric.bottom
+      margin-left: 8
+      margin-top: 4
+      width: 135
+      height: 16
+      color: #cfd8e3
+      font: verdana-11px
+      text: RAM: n/d
+
+    Label
+      id: updateMetric
+      anchors.left: ramMetric.right
+      anchors.right: parent.right
+      anchors.top: activeMetric.bottom
+      margin-left: 8
+      margin-top: 4
+      height: 16
+      color: #cfd8e3
+      font: verdana-11px
+      text: Atualizado: -
+
+  Panel
+    id: sidebarPanel
+    anchors.top: dashboardPanel.bottom
+    anchors.left: parent.left
+    anchors.bottom: parent.bottom
+    margin-top: 8
+    margin-bottom: 42
+    width: 218
+    image-source: /images/ui/panel_flat
+    image-border: 5
+    padding: 7
+    background-color: #0f141bdd
+
+    Label
+      id: combatCategory
+      anchors.top: parent.top
+      anchors.left: parent.left
+      anchors.right: parent.right
+      height: 15
+      color: #ffd36b
+      font: verdana-11px-bold
+      text: [ATK] COMBATE
+
+    Panel
+      id: comboCard
+      anchors.top: combatCategory.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      margin-top: 4
+      height: 58
+      padding: 5
+      image-source: /images/ui/panel_flat
+      image-border: 5
+      background-color: #171b22dd
+
+      Label
+        id: comboIcon
+        anchors.left: parent.left
+        anchors.top: parent.top
+        width: 30
+        height: 44
+        text-align: center
+        color: #ffd36b
+        font: verdana-11px-bold
+        text: ATK
+
+      Label
+        id: comboTitle
+        anchors.left: comboIcon.right
+        anchors.right: comboBadge.left
+        anchors.top: parent.top
+        margin-left: 4
+        margin-right: 4
+        height: 15
+        color: #cfd8e3
+        font: verdana-11px-bold
+        text: COMBO ESPART
+
+      Label
+        id: comboDesc
+        anchors.left: comboIcon.right
+        anchors.right: comboGear.left
+        anchors.top: comboTitle.bottom
+        margin-left: 4
+        margin-top: 1
+        height: 15
+        color: #9fb2c4
+        font: verdana-11px
+        text: Delay e prioridades
+
+      Label
+        id: comboBadge
+        anchors.right: comboGear.left
+        anchors.top: parent.top
+        margin-right: 4
+        width: 54
+        height: 15
+        text-align: center
+        color: #ff7676
+        font: verdana-11px-bold
+        text: Inativo
+
+      Button
+        id: comboEnable
+        anchors.left: comboIcon.right
+        anchors.right: comboGear.left
+        anchors.top: comboDesc.bottom
+        margin-left: 4
+        margin-right: 4
+        height: 18
+        text: Ativar
+
+      Button
+        id: comboGear
+        anchors.right: parent.right
+        anchors.top: parent.top
+        width: 30
+        height: 44
+        text: CFG
+
+    Panel
+      id: smartCard
+      anchors.top: comboCard.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      margin-top: 5
+      height: 58
+      padding: 5
+      image-source: /images/ui/panel_flat
+      image-border: 5
+      background-color: #171b22dd
+
+      Label
+        id: smartIcon
+        anchors.left: parent.left
+        anchors.top: parent.top
+        width: 30
+        height: 44
+        text-align: center
+        color: #ffd36b
+        font: verdana-11px-bold
+        text: PVP
+
+      Label
+        id: smartTitle
+        anchors.left: smartIcon.right
+        anchors.right: smartBadge.left
+        anchors.top: parent.top
+        margin-left: 4
+        margin-right: 4
+        height: 15
+        color: #cfd8e3
+        font: verdana-11px-bold
+        text: SMART PVP
+
+      Label
+        id: smartDesc
+        anchors.left: smartIcon.right
+        anchors.right: smartGear.left
+        anchors.top: smartTitle.bottom
+        margin-left: 4
+        margin-top: 1
+        height: 15
+        color: #9fb2c4
+        font: verdana-11px
+        text: SSA, ring e trap
+
+      Label
+        id: smartBadge
+        anchors.right: smartGear.left
+        anchors.top: parent.top
+        margin-right: 4
+        width: 54
+        height: 15
+        text-align: center
+        color: #ff7676
+        font: verdana-11px-bold
+        text: Inativo
+
+      Button
+        id: smartEnable
+        anchors.left: smartIcon.right
+        anchors.right: smartGear.left
+        anchors.top: smartDesc.bottom
+        margin-left: 4
+        margin-right: 4
+        height: 18
+        text: Ativar
+
+      Button
+        id: smartGear
+        anchors.right: parent.right
+        anchors.top: parent.top
+        width: 30
+        height: 44
+        text: CFG
+
+    Label
+      id: castleCategory
+      anchors.top: smartCard.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      margin-top: 8
+      height: 15
+      color: #ffd36b
+      font: verdana-11px-bold
+      text: [CST] CASTLE
+
+    Panel
+      id: castleCard
+      anchors.top: castleCategory.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      margin-top: 4
+      height: 58
+      padding: 5
+      image-source: /images/ui/panel_flat
+      image-border: 5
+      background-color: #171b22dd
+
+      Label
+        id: castleIcon
+        anchors.left: parent.left
+        anchors.top: parent.top
+        width: 30
+        height: 44
+        text-align: center
+        color: #ffd36b
+        font: verdana-11px-bold
+        text: CST
+
+      Label
+        id: castleTitle
+        anchors.left: castleIcon.right
+        anchors.right: castleBadge.left
+        anchors.top: parent.top
+        margin-left: 4
+        margin-right: 4
+        height: 15
+        color: #cfd8e3
+        font: verdana-11px-bold
+        text: CASTLE PRO
+
+      Label
+        id: castleDesc
+        anchors.left: castleIcon.right
+        anchors.right: castleGear.left
+        anchors.top: castleTitle.bottom
+        margin-left: 4
+        margin-top: 1
+        height: 15
+        color: #9fb2c4
+        font: verdana-11px
+        text: Areas e logout
+
+      Label
+        id: castleBadge
+        anchors.right: castleGear.left
+        anchors.top: parent.top
+        margin-right: 4
+        width: 54
+        height: 15
+        text-align: center
+        color: #ff7676
+        font: verdana-11px-bold
+        text: Inativo
+
+      Button
+        id: castleEnable
+        anchors.left: castleIcon.right
+        anchors.right: castleGear.left
+        anchors.top: castleDesc.bottom
+        margin-left: 4
+        margin-right: 4
+        height: 18
+        text: Ativar
+
+      Button
+        id: castleGear
+        anchors.right: parent.right
+        anchors.top: parent.top
+        width: 30
+        height: 44
+        text: CFG
+
+    Label
+      id: defenseCategory
+      anchors.top: castleCard.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      margin-top: 8
+      height: 15
+      color: #ffd36b
+      font: verdana-11px-bold
+      text: [DEF] DEFESA
+
+    Panel
+      id: holidayCard
+      anchors.top: defenseCategory.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      margin-top: 4
+      height: 58
+      padding: 5
+      image-source: /images/ui/panel_flat
+      image-border: 5
+      background-color: #171b22dd
+
+      Label
+        id: holidayIcon
+        anchors.left: parent.left
+        anchors.top: parent.top
+        width: 30
+        height: 44
+        text-align: center
+        color: #ffd36b
+        font: verdana-11px-bold
+        text: DEF
+
+      Label
+        id: holidayTitle
+        anchors.left: holidayIcon.right
+        anchors.right: holidayBadge.left
+        anchors.top: parent.top
+        margin-left: 4
+        margin-right: 4
+        height: 15
+        color: #cfd8e3
+        font: verdana-11px-bold
+        text: HOLIDAY AOE
+
+      Label
+        id: holidayDesc
+        anchors.left: holidayIcon.right
+        anchors.right: holidayGear.left
+        anchors.top: holidayTitle.bottom
+        margin-left: 4
+        margin-top: 1
+        height: 15
+        color: #9fb2c4
+        font: verdana-11px
+        text: Magias e safe
+
+      Label
+        id: holidayBadge
+        anchors.right: holidayGear.left
+        anchors.top: parent.top
+        margin-right: 4
+        width: 54
+        height: 15
+        text-align: center
+        color: #ff7676
+        font: verdana-11px-bold
+        text: Inativo
+
+      Button
+        id: holidayEnable
+        anchors.left: holidayIcon.right
+        anchors.right: holidayGear.left
+        anchors.top: holidayDesc.bottom
+        margin-left: 4
+        margin-right: 4
+        height: 18
+        text: Ativar
+
+      Button
+        id: holidayGear
+        anchors.right: parent.right
+        anchors.top: parent.top
+        width: 30
+        height: 44
+        text: CFG
+
+  Panel
+    id: detailPanel
+    anchors.top: dashboardPanel.bottom
+    anchors.left: sidebarPanel.right
+    anchors.right: parent.right
+    anchors.bottom: parent.bottom
+    margin-left: 8
+    margin-top: 8
+    margin-bottom: 42
+    image-source: /images/ui/panel_flat
+    image-border: 5
+    padding: 8
+    background-color: #101720ee
+
+    Label
+      id: detailTitle
+      anchors.left: parent.left
+      anchors.top: parent.top
+      anchors.right: detailBadge.left
+      margin-right: 8
+      height: 18
+      color: #ffd36b
+      font: verdana-11px-bold
+      text: COMBO ESPART
+
+    Label
+      id: detailBadge
+      anchors.right: parent.right
+      anchors.top: parent.top
+      width: 70
+      height: 18
+      text-align: center
+      color: #ff7676
+      font: verdana-11px-bold
+      text: Inativo
+
+    Label
+      id: detailSubtitle
+      anchors.left: parent.left
+      anchors.top: detailTitle.bottom
+      anchors.right: detailLoad.left
+      margin-top: 2
+      margin-right: 7
+      height: 18
+      color: #cfd8e3
+      font: verdana-11px
+      text: Configuracao centralizada
+
+    Button
+      id: detailLoad
+      anchors.right: parent.right
+      anchors.top: detailBadge.bottom
+      margin-top: 1
+      width: 86
+      height: 22
+      text: Ativar
+
+    Panel
+      id: configPanel
+      anchors.top: detailSubtitle.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      anchors.bottom: parent.bottom
+      margin-top: 8
+      padding: 4
+      background-color: #0d121add
+
+      Panel
+        id: configRow1
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        height: 34
+
+        Label
+          id: configLabel1
+          anchors.left: parent.left
+          anchors.top: parent.top
+          width: 126
+          height: 26
+          color: #e8edf4
+          font: verdana-11px-bold
+
+        TextEdit
+          id: configInput1
+          anchors.left: configLabel1.right
+          anchors.right: configAction1.left
+          anchors.top: parent.top
+          margin-left: 5
+          margin-right: 5
+          height: 24
+
+        Button
+          id: configAction1
+          anchors.right: parent.right
+          anchors.top: parent.top
+          width: 66
+          height: 24
+          text: OK
+
+      Panel
+        id: configRow2
+        anchors.top: configRow1.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        margin-top: 5
+        height: 34
+
+        Label
+          id: configLabel2
+          anchors.left: parent.left
+          anchors.top: parent.top
+          width: 126
+          height: 26
+          color: #e8edf4
+          font: verdana-11px-bold
+
+        TextEdit
+          id: configInput2
+          anchors.left: configLabel2.right
+          anchors.right: configAction2.left
+          anchors.top: parent.top
+          margin-left: 5
+          margin-right: 5
+          height: 24
+
+        Button
+          id: configAction2
+          anchors.right: parent.right
+          anchors.top: parent.top
+          width: 66
+          height: 24
+          text: OK
+
+      Panel
+        id: configRow3
+        anchors.top: configRow2.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        margin-top: 5
+        height: 34
+
+        Label
+          id: configLabel3
+          anchors.left: parent.left
+          anchors.top: parent.top
+          width: 126
+          height: 26
+          color: #e8edf4
+          font: verdana-11px-bold
+
+        TextEdit
+          id: configInput3
+          anchors.left: configLabel3.right
+          anchors.right: configAction3.left
+          anchors.top: parent.top
+          margin-left: 5
+          margin-right: 5
+          height: 24
+
+        Button
+          id: configAction3
+          anchors.right: parent.right
+          anchors.top: parent.top
+          width: 66
+          height: 24
+          text: OK
+
+      Panel
+        id: configRow4
+        anchors.top: configRow3.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        margin-top: 5
+        height: 34
+
+        Label
+          id: configLabel4
+          anchors.left: parent.left
+          anchors.top: parent.top
+          width: 126
+          height: 26
+          color: #e8edf4
+          font: verdana-11px-bold
+
+        TextEdit
+          id: configInput4
+          anchors.left: configLabel4.right
+          anchors.right: configAction4.left
+          anchors.top: parent.top
+          margin-left: 5
+          margin-right: 5
+          height: 24
+
+        Button
+          id: configAction4
+          anchors.right: parent.right
+          anchors.top: parent.top
+          width: 66
+          height: 24
+          text: OK
+
+      Panel
+        id: configRow5
+        anchors.top: configRow4.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        margin-top: 5
+        height: 34
+
+        Label
+          id: configLabel5
+          anchors.left: parent.left
+          anchors.top: parent.top
+          width: 126
+          height: 26
+          color: #e8edf4
+          font: verdana-11px-bold
+
+        TextEdit
+          id: configInput5
+          anchors.left: configLabel5.right
+          anchors.right: configAction5.left
+          anchors.top: parent.top
+          margin-left: 5
+          margin-right: 5
+          height: 24
+
+        Button
+          id: configAction5
+          anchors.right: parent.right
+          anchors.top: parent.top
+          width: 66
+          height: 24
+          text: OK
+
+      Panel
+        id: configRow6
+        anchors.top: configRow5.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        margin-top: 5
+        height: 34
+
+        Label
+          id: configLabel6
+          anchors.left: parent.left
+          anchors.top: parent.top
+          width: 126
+          height: 26
+          color: #e8edf4
+          font: verdana-11px-bold
+
+        TextEdit
+          id: configInput6
+          anchors.left: configLabel6.right
+          anchors.right: configAction6.left
+          anchors.top: parent.top
+          margin-left: 5
+          margin-right: 5
+          height: 24
+
+        Button
+          id: configAction6
+          anchors.right: parent.right
+          anchors.top: parent.top
+          width: 66
+          height: 24
+          text: OK
+
+      Panel
+        id: configRow7
+        anchors.top: configRow6.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        margin-top: 5
+        height: 34
+
+        Label
+          id: configLabel7
+          anchors.left: parent.left
+          anchors.top: parent.top
+          width: 126
+          height: 26
+          color: #e8edf4
+          font: verdana-11px-bold
+
+        TextEdit
+          id: configInput7
+          anchors.left: configLabel7.right
+          anchors.right: configAction7.left
+          anchors.top: parent.top
+          margin-left: 5
+          margin-right: 5
+          height: 24
+
+        Button
+          id: configAction7
+          anchors.right: parent.right
+          anchors.top: parent.top
+          width: 66
+          height: 24
+          text: OK
+
+      Panel
+        id: configRow8
+        anchors.top: configRow7.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        margin-top: 5
+        height: 34
+
+        Label
+          id: configLabel8
+          anchors.left: parent.left
+          anchors.top: parent.top
+          width: 126
+          height: 26
+          color: #e8edf4
+          font: verdana-11px-bold
+
+        TextEdit
+          id: configInput8
+          anchors.left: configLabel8.right
+          anchors.right: configAction8.left
+          anchors.top: parent.top
+          margin-left: 5
+          margin-right: 5
+          height: 24
+
+        Button
+          id: configAction8
+          anchors.right: parent.right
+          anchors.top: parent.top
+          width: 66
+          height: 24
+          text: OK
+
+  Panel
+    id: footer
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.bottom: parent.bottom
+    height: 28
+
+    Button
+      id: allButton
+      anchors.left: parent.left
+      anchors.top: parent.top
+      width: 84
+      height: 24
+      text: Ativar tudo
+
+    Button
+      id: clearButton
+      anchors.left: allButton.right
+      anchors.top: parent.top
+      margin-left: 5
+      width: 92
+      height: 24
+      text: Desativar
+
+    Button
+      id: confirmButton
+      anchors.left: clearButton.right
+      anchors.right: closeButton.left
+      anchors.top: parent.top
+      margin-left: 5
+      margin-right: 5
+      height: 24
+      text: Carregar liberados
+
+    Button
+      id: closeButton
+      anchors.right: parent.right
+      anchors.top: parent.top
+      width: 62
+      height: 24
+      text: Fechar
 ]])
   end)
 
@@ -1237,9 +2525,9 @@ local function jqmCreateWindow()
   if not jqmLoadManagerUi() or not UI or not UI.createWindow then return nil end
 
   local root = rootWidget or (g_ui.getRootWidget and g_ui.getRootWidget())
-  local okWindow, window = pcall(function() return UI.createWindow("DerpetsonScriptsWindow", root) end)
+  local okWindow, window = pcall(function() return UI.createWindow("DerpetsonScriptsHubWindow", root) end)
   if not okWindow or not window then
-    okWindow, window = pcall(function() return UI.createWindow("DerpetsonScriptsWindow") end)
+    okWindow, window = pcall(function() return UI.createWindow("DerpetsonScriptsHubWindow") end)
   end
   if not okWindow or not window then return nil end
 
@@ -1254,43 +2542,92 @@ local function jqmCreateWindow()
   end
   if jqmWindowControl("allButton") then
     jqmWindowControl("allButton").onClick = function()
-      jqmSetAllSelected(true)
+      for _, module in ipairs(JQM_MODULES) do
+        local data = jqmModuleData(module.key)
+        data.enabled = true
+        data.config.enabled = true
+        data.paused = false
+        jqmApplyModuleConfig(module, "enabled", true)
+        if module.script then storage.JQMScriptManager.selected[module.script] = true end
+      end
+      jqmTouchUpdate()
+      jqmRefreshManagerUi()
       jqmRequestOrLoad()
     end
   end
   if jqmWindowControl("clearButton") then
-    jqmWindowControl("clearButton").onClick = function() jqmSetAllSelected(false) end
+    jqmWindowControl("clearButton").onClick = function()
+      for _, module in ipairs(JQM_MODULES) do
+        module:setEnabled(false)
+      end
+      jqmRefreshManagerUi()
+    end
   end
-  local function bindModuleCard(scriptName)
-    local item = jqmScriptItem(scriptName)
-    local prefix = JQM_CARD_PREFIX[scriptName]
-    if not item or not prefix then return end
+  if jqmWindowControl("detailLoad") then
+    jqmWindowControl("detailLoad").onClick = function()
+      local module = jqmActiveModule()
+      if module then
+        module:setEnabled(not jqmModuleRuntimeActive(module))
+      end
+    end
+  end
 
-    local function loadModule()
-      jqmActivateSelected(scriptName)
+  for index = 1, 8 do
+    local rowIndex = index
+    local input = jqmWindowControl("configInput" .. tostring(index))
+    local action = jqmWindowControl("configAction" .. tostring(index))
+    if input then
+      input.onTextChange = function(_, text)
+        if jqmInputLocks["configInput" .. tostring(rowIndex)] then return end
+        jqmSaveConfigInput(rowIndex, text)
+      end
+    end
+    if action then
+      action.onClick = function() jqmConfigAction(rowIndex) end
+    end
+  end
+
+  local function bindModuleCard(module)
+    if not module then return end
+    local prefix = module.prefix
+    if not prefix then return end
+
+    local function selectModule()
+      storage.JQMScriptManager.activeModule = module.key
+      jqmRefreshManagerUi()
+    end
+    local function toggleModule()
+      storage.JQMScriptManager.activeModule = module.key
+      module:setEnabled(not jqmModuleRuntimeActive(module))
     end
     local function hoverModule(_, hovered)
-      jqmUpdateModuleCard(item, hovered == true)
+      jqmUpdateModuleCard(module, hovered == true)
     end
 
     for _, suffix in ipairs({ "Card", "Icon", "Title", "Desc", "Badge" }) do
       local widget = jqmWindowControl(prefix .. suffix)
       if widget then
-        widget.onClick = loadModule
+        widget.onClick = selectModule
         widget.onHoverChange = hoverModule
       end
     end
 
+    local enable = jqmWindowControl(prefix .. "Enable")
+    if enable then
+      enable.onClick = toggleModule
+      enable.onHoverChange = hoverModule
+    end
+
     local gear = jqmWindowControl(prefix .. "Gear")
     if gear then
-      gear.onClick = loadModule
+      gear.onClick = selectModule
       gear.onHoverChange = hoverModule
     end
   end
 
-  bindModuleCard("combo")
-  bindModuleCard("castle_manager")
-  bindModuleCard("holiday_aoe")
+  for _, module in ipairs(JQM_MODULES) do
+    bindModuleCard(module)
+  end
 
   jqmRefreshManagerUi()
   return jqmWindow

@@ -2,7 +2,7 @@
 -- Compatibilidade: clientes antigos que ainda carregam este arquivo agora abrem
 -- apenas o Derpetson Scripts, onde todos os produtos ficam em uma aba unica.
 
-local JQM_MANAGER_URL = "https://raw.githubusercontent.com/Thesaidctm/script-holidayys/main/SCRIPT_MANAGER.lua?v=2026061206"
+local JQM_MANAGER_URL = "https://raw.githubusercontent.com/Thesaidctm/script-holidayys/main/SCRIPT_MANAGER.lua?v=2026061205"
 
 local function jqmGlobals()
   if type(_G) == "table" then return _G end

@@ -1,4 +1,4 @@
--- Jequi Multi Assessoria - Script Manager publico
+-- Derpetson Scripts - loader publico
 -- Este arquivo nao contem os scripts reais. Ele envia o MAC/HWID para aprovacao
 -- e baixa do servidor somente os scripts liberados no painel.
 
@@ -254,6 +254,6 @@ local function jqmRequestOrLoad()
 end
 
 UI.Separator()
-UI.Label("Jequi Script Manager")
-UI.Label("Liberacao por MAC")
-UI.Button("Solicitar / Carregar", jqmRequestOrLoad)
+UI.Label("Derpetson Scripts")
+UI.Label("Acesso por MAC")
+UI.Button("Acessar Scripts", jqmRequestOrLoad)

@@ -2,11 +2,20 @@
 -- Este arquivo nao contem os scripts reais. Ele envia o MAC/HWID para aprovacao
 -- e baixa do servidor somente os scripts liberados no painel.
 
-setDefaultTab("Main")
+local JQM_MANAGER_VERSION = 2026061202
+if _G.JQMScriptManagerVersion == JQM_MANAGER_VERSION then
+  if type(_G.JQMOpenManager) == "function" then _G.JQMOpenManager() end
+  return
+end
+_G.JQMScriptManagerVersion = JQM_MANAGER_VERSION
 
 local emblemId = 3
 local JQM_LICENSE_SERVER = "https://jequimultiassessoria.com.br/license_server/api.php"
 local JQM_PENDING_MESSAGE = "AGUARDANDO LIBERACAO MANDE MENSAGEM NO WHATSAPP PARA 33 999987736"
+local JQM_MANAGER_TAB = "Derpetson Scripts"
+local jqmOriginalSetDefaultTab = setDefaultTab
+local jqmRuntimeLoaded = type(_G.JQMScriptManagerRuntimeLoaded) == "table" and _G.JQMScriptManagerRuntimeLoaded or {}
+_G.JQMScriptManagerRuntimeLoaded = jqmRuntimeLoaded
 
 local JQM_SCRIPTS = {
   { name = "combo", label = "Combo System", desc = "Foco, runas e prioridades" },
@@ -23,6 +32,25 @@ local JQM_SWITCH_IDS = {
 local jqmWindow = nil
 local jqmLauncher = nil
 local jqmUiLoaded = false
+local jqmManagerTab = nil
+
+local function jqmEnsureManagerTab()
+  if jqmManagerTab then return jqmManagerTab end
+  if type(getTab) == "function" then
+    local ok, tab = pcall(function() return getTab(JQM_MANAGER_TAB) end)
+    if ok and tab then
+      jqmManagerTab = tab
+      return jqmManagerTab
+    end
+  end
+  if type(jqmOriginalSetDefaultTab) == "function" then
+    local ok, tab = pcall(function() return jqmOriginalSetDefaultTab(JQM_MANAGER_TAB) end)
+    if ok and tab then jqmManagerTab = tab end
+  end
+  return jqmManagerTab
+end
+
+jqmEnsureManagerTab()
 
 local function jqmWindowControl(id)
   if not jqmWindow then return nil end
@@ -264,6 +292,49 @@ local function jqmBuildUrl(action, extra)
   return JQM_LICENSE_SERVER .. "?" .. table.concat(parts, "&")
 end
 
+local function jqmRunInManagerTab(fn)
+  local originalSetDefaultTab = setDefaultTab
+  local originalGetTab = getTab
+  local originalParent = parent
+  local managerTab = jqmEnsureManagerTab()
+
+  local function forcedGetTab()
+    return jqmEnsureManagerTab()
+  end
+
+  local function forcedSetDefaultTab()
+    local tab = jqmEnsureManagerTab()
+    if tab then
+      parent = tab
+      return tab
+    end
+    if type(originalSetDefaultTab) == "function" then
+      return originalSetDefaultTab(JQM_MANAGER_TAB)
+    end
+    return nil
+  end
+
+  if type(originalSetDefaultTab) == "function" then
+    setDefaultTab = forcedSetDefaultTab
+  end
+  if type(originalGetTab) == "function" then
+    getTab = forcedGetTab
+  end
+  if managerTab then parent = managerTab end
+
+  local ok, err = pcall(fn)
+
+  if type(originalSetDefaultTab) == "function" then
+    setDefaultTab = originalSetDefaultTab
+  end
+  if type(originalGetTab) == "function" then
+    getTab = originalGetTab
+  end
+  parent = originalParent
+
+  return ok, err
+end
+
 local function jqmRunPayload(scriptName, data)
   if type(data) ~= "string" or data == "" then
     jqmWarn("payload vazio")
@@ -285,18 +356,24 @@ local function jqmRunPayload(scriptName, data)
     jqmWarn("loadstring/load indisponivel neste OTC")
     return false
   end
+  if jqmRuntimeLoaded[scriptName] == true then
+    jqmSetManagerStatus("Ja carregado na aba " .. JQM_MANAGER_TAB)
+    jqmWarn("ja carregado: " .. jqmScriptLabel(scriptName))
+    return true
+  end
   local fn, loadErr = loader(data, "@jqm_" .. tostring(scriptName) .. ".lua")
   if not fn then
     jqmWarn("payload invalido: " .. tostring(loadErr))
     return false
   end
-  local ok, runErr = pcall(fn)
+  local ok, runErr = jqmRunInManagerTab(fn)
   if not ok then
     jqmWarn("erro no script: " .. tostring(runErr))
     return false
   end
+  jqmRuntimeLoaded[scriptName] = true
   storage.JQMScriptManager.loaded[scriptName] = true
-  jqmSetManagerStatus("Carregado. Use o Setup no painel esquerdo.")
+  jqmSetManagerStatus("Carregado na aba " .. JQM_MANAGER_TAB)
   jqmWarn("carregado: " .. jqmScriptLabel(scriptName))
   return true
 end
@@ -587,7 +664,7 @@ DerpetsonScriptsWindow < MainWindow
       text-align: center
       color: #9fb2c4
       font: verdana-11px
-      text: 2. Configure pelo botao Setup que aparece no painel esquerdo.
+      text: 2. Tudo carregado fica agrupado nesta aba do bot.
 
   Panel
     id: footer
@@ -692,7 +769,7 @@ end
 if jqmLoadManagerUi() and UI and UI.createWidget then
   local okPanel, panel = pcall(function()
     if UI and UI.createWidget then
-      return UI.createWidget("DerpetsonScriptHubPanel")
+      return UI.createWidget("DerpetsonScriptHubPanel", jqmEnsureManagerTab())
     end
     return nil
   end)
@@ -704,9 +781,10 @@ if jqmLoadManagerUi() and UI and UI.createWidget then
     if jqmLauncher.status then jqmLauncher.status.onClick = jqmOpenManager end
     jqmRefreshManagerUi()
   elseif UI and UI.Button then
-    UI.Button("Derpetson Scripts", jqmOpenManager)
+    UI.Button("Derpetson Scripts", jqmOpenManager, jqmEnsureManagerTab())
   end
 elseif UI and UI.Button then
-  UI.Separator()
-  UI.Button("Derpetson Scripts", jqmOpenManager)
+  UI.Button("Derpetson Scripts", jqmOpenManager, jqmEnsureManagerTab())
 end
+
+_G.JQMOpenManager = jqmOpenManager

@@ -1,29 +1,8 @@
--- CASTLE MANAGER PRO public bridge. O codigo real fica no servidor de licencas.
--- CastleManagerBotPanel
+-- Castle Manager public bridge.
+-- Compatibilidade: clientes antigos que ainda carregam este arquivo agora abrem
+-- apenas o Derpetson Scripts, onde todos os produtos ficam em uma aba unica.
 
-setDefaultTab("Main")
-
-local CASTLE_MANAGER_SCRIPT_VERSION = 2026061103
-local CASTLE_MANAGER_SCRIPT_NAME = "CASTLE_MANAGER_LOGOUT.lua"
-local CASTLE_MANAGER_UPDATE_URL = "https://api.github.com/repos/Thesaidctm/script-holidayys/contents/CASTLE_MANAGER_LOGOUT.lua?ref=main"
-
-local JQM_REMOTE_SCRIPT = "castle_manager"
-local JQM_LICENSE_SERVER = "https://jequimultiassessoria.com.br/license_server/api.php"
-local emblemId = 3
-
-if type(storage) == "table" then
-  storage.Combo = type(storage.Combo) == "table" and storage.Combo or {}
-  storage.Combo.licenseKey = storage.Combo.licenseKey or ""
-end
-
-local function jqmUrlEncode(value)
-  value = tostring(value or "")
-  value = value:gsub("\n", "\r\n")
-  value = value:gsub("([^%w%-%_%.%~])", function(char)
-    return string.format("%%%02X", string.byte(char))
-  end)
-  return value
-end
+local JQM_MANAGER_URL = "https://jequimultiassessoria.com.br/license_server/script_manager.lua?v=2026061202"
 
 local function jqmWarn(text)
   local message = "[JQM] " .. tostring(text or "")
@@ -31,68 +10,6 @@ local function jqmWarn(text)
     pcall(function() modules.game_textmessage.displayGameMessage(message) end)
   end
   if warn then warn(message) end
-end
-
-local function jqmPlayerName()
-  if player and player.getName then
-    local ok, name = pcall(function() return player:getName() end)
-    if ok and name then return tostring(name) end
-  end
-  if g_game and g_game.getLocalPlayer then
-    local ok, localPlayer = pcall(function() return g_game.getLocalPlayer() end)
-    if ok and localPlayer and localPlayer.getName then
-      local okName, name = pcall(function() return localPlayer:getName() end)
-      if okName and name then return tostring(name) end
-    end
-  end
-  return ""
-end
-
-local function jqmTryCall(path)
-  local current = _G
-  for part in tostring(path):gmatch("[^%.]+") do
-    if type(current) ~= "table" and type(current) ~= "userdata" then return nil end
-    current = current[part]
-    if current == nil then return nil end
-  end
-  if type(current) ~= "function" then return nil end
-  local ok, value = pcall(current)
-  if ok and value ~= nil then return tostring(value) end
-  return nil
-end
-
-local function jqmMachineId()
-  if modules and modules.client and modules.client.g_platform and modules.client.g_platform.getMacAddresses then
-    local ok, macs = pcall(function()
-      return modules.client.g_platform.getMacAddresses()
-    end)
-    if ok and type(macs) == "table" then
-      local list = {}
-      for _, mac in pairs(macs) do
-        if mac and tostring(mac) ~= "" then
-          table.insert(list, tostring(mac))
-        end
-      end
-      if #list > 0 then
-        return table.concat(list, "\n")
-      end
-    end
-  end
-
-  local candidates = {
-    "getMacAddress",
-    "g_platform.getMacAddress",
-    "g_platform.getMachineId",
-    "g_platform.getUUID",
-    "g_app.getMachineId",
-    "g_app.getUniqueId",
-    "g_resources.getMachineId"
-  }
-  for _, path in ipairs(candidates) do
-    local value = jqmTryCall(path)
-    if value and value ~= "" then return value end
-  end
-  return "unknown"
 end
 
 local function jqmNormalizeHttp(a, b, c)
@@ -138,133 +55,40 @@ local function jqmHttpGet(url, callback)
   return false
 end
 
-local function jqmBuildUrl(scriptName, publicIp)
-  local machineId = jqmMachineId()
-  local key = ""
-  if type(storage) == "table" and type(storage.Combo) == "table" then
-    key = storage.Combo.licenseKey or ""
+local function jqmLoadManager()
+  if type(_G.JQMOpenManager) == "function" then
+    _G.JQMOpenManager()
+    return
   end
-  local params = {
-    action = "script",
-    script = scriptName,
-    key = key,
-    hwid = machineId,
-    mac = machineId,
-    ip = publicIp or "",
-    char = jqmPlayerName(),
-    emblem = emblemId
-  }
-  local parts = {}
-  for k, v in pairs(params) do
-    table.insert(parts, jqmUrlEncode(k) .. "=" .. jqmUrlEncode(v))
-  end
-  return JQM_LICENSE_SERVER .. "?" .. table.concat(parts, "&")
-end
+  if _G.JQMScriptManagerBootstrapLoading == true then return end
+  _G.JQMScriptManagerBootstrapLoading = true
 
-local function jqmRunPayload(data)
-  if type(data) ~= "string" or data == "" then
-    jqmWarn("payload vazio")
-    return false
-  end
-  if data:sub(1, 1) == "{" then
-    if data:find("device_pending", 1, true) then
-      jqmWarn("dispositivo enviado para aprovacao. Aguarde liberacao no painel.")
-    else
-      jqmWarn("licenca recusada: " .. data)
+  jqmHttpGet(JQM_MANAGER_URL, function(data, err)
+    _G.JQMScriptManagerBootstrapLoading = false
+    if err or type(data) ~= "string" or data == "" then
+      jqmWarn("falha ao carregar central: " .. tostring(err or "sem dados"))
+      return
     end
-    return false
-  end
-  local loader = loadstring or load
-  if not loader then
-    jqmWarn("loadstring/load indisponivel neste OTC")
-    return false
-  end
-  local fn, loadErr = loader(data, "@jqm_remote_" .. JQM_REMOTE_SCRIPT .. ".lua")
-  if not fn then
-    jqmWarn("payload invalido: " .. tostring(loadErr))
-    return false
-  end
-  local ok, runErr = pcall(fn)
-  if not ok then
-    jqmWarn("erro no script remoto: " .. tostring(runErr))
-    return false
-  end
-  jqmWarn("script remoto carregado: " .. JQM_REMOTE_SCRIPT)
-  return true
-end
 
-local function jqmLoadRemote(scriptName)
-  local function requestWithIp(publicIp)
-    jqmHttpGet(jqmBuildUrl(scriptName, publicIp), function(data, err)
-      if err or not data then
-        jqmWarn("falha ao baixar script: " .. tostring(err or "sem dados"))
-        return
-      end
-      jqmRunPayload(data)
-    end)
-  end
+    local loader = loadstring or load
+    if not loader then
+      jqmWarn("loadstring/load indisponivel neste OTC")
+      return
+    end
 
-  jqmHttpGet("https://api.ipify.org", function(ip)
-    requestWithIp(ip or "")
+    local fn, loadErr = loader(data, "@jqm_script_manager.lua")
+    if not fn then
+      jqmWarn("central invalida: " .. tostring(loadErr))
+      return
+    end
+
+    local ok, runErr = pcall(fn)
+    if not ok then
+      jqmWarn("erro na central: " .. tostring(runErr))
+      return
+    end
+    jqmWarn("central Derpetson carregada")
   end)
 end
 
-JQMLicense = JQMLicense or {}
-JQMLicense.load = jqmLoadRemote
-
-jqmLoadRemote(JQM_REMOTE_SCRIPT)
-
-local JQM_COMPAT_PAD = [=[
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 001. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 002. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 003. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 004. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 005. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 006. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 007. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 008. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 009. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 010. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 011. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 012. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 013. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 014. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 015. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 016. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 017. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 018. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 019. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 020. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 021. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 022. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 023. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 024. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 025. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 026. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 027. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 028. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 029. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 030. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 031. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 032. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 033. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 034. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 035. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 036. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 037. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 038. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 039. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 040. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 041. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 042. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 043. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 044. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 045. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 046. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 047. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 048. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 049. This public file intentionally contains no private castle logic.
-CASTLE MANAGER PRO CastleManagerBotPanel bridge compatibility padding 050. This public file intentionally contains no private castle logic.
-]=]
-
-if false then print(JQM_COMPAT_PAD) end
+jqmLoadManager()

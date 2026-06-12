@@ -15,7 +15,7 @@ local function jqmGlobals()
 end
 
 local jqmGlobal = jqmGlobals()
-local JQM_MANAGER_VERSION = 2026061211
+local JQM_MANAGER_VERSION = 2026061213
 if jqmGlobal.JQMScriptManagerVersion == JQM_MANAGER_VERSION then
   if type(jqmGlobal.JQMOpenManager) == "function" then jqmGlobal.JQMOpenManager() end
   return
@@ -35,15 +35,21 @@ jqmGlobal.JQMScriptManagerRuntimeLoaded = jqmRuntimeLoaded
 jqmGlobal.JQMScriptManagerRuntimeVersion = JQM_MANAGER_VERSION
 
 local JQM_SCRIPTS = {
-  { name = "combo", label = "COMBO ESPART V3", short = "COMBO ESPART", file = "COMBO_ESPART_V3.lua", desc = "Combo, runas e prioridades" },
-  { name = "holiday_aoe", label = "HOLIDAY AOE", short = "HOLIDAY AOE", file = "holiday_aoe.lua", desc = "Area, combo e PvP" },
-  { name = "castle_manager", label = "CASTLE PRO", short = "CASTLE PRO", file = "CASTLE_MANAGER_LOGOUT.lua", desc = "Castle, seguranca e logout" }
+  { name = "combo", label = "COMBO ESPART V3", short = "COMBO ESPART", file = "COMBO_ESPART_V3.lua", desc = "Combo, runas e prioridades", category = "COMBATE", icon = "ATK" },
+  { name = "castle_manager", label = "CASTLE PRO", short = "CASTLE PRO", file = "CASTLE_MANAGER_LOGOUT.lua", desc = "Castle, seguranca e logout", category = "CASTLE", icon = "CST" },
+  { name = "holiday_aoe", label = "HOLIDAY AOE", short = "HOLIDAY AOE", file = "holiday_aoe.lua", desc = "Area, combo e PvP", category = "DEFESA", icon = "DEF" }
 }
 
 local JQM_SWITCH_IDS = {
-  combo = "comboSwitch",
-  holiday_aoe = "holidaySwitch",
-  castle_manager = "castleSwitch"
+  combo = "comboCard",
+  holiday_aoe = "holidayCard",
+  castle_manager = "castleCard"
+}
+
+local JQM_CARD_PREFIX = {
+  combo = "combo",
+  holiday_aoe = "holiday",
+  castle_manager = "castle"
 }
 
 local jqmWindow = nil
@@ -51,6 +57,7 @@ local jqmLauncher = nil
 local jqmUiLoaded = false
 local jqmManagerTab = nil
 local jqmLoadedRows = {}
+local jqmOpenManager = nil
 
 local function jqmEnsureManagerTab()
   if jqmManagerTab then return jqmManagerTab end
@@ -73,6 +80,10 @@ jqmEnsureManagerTab()
 local function jqmWindowControl(id)
   if not jqmWindow then return nil end
   if jqmWindow[id] then return jqmWindow[id] end
+  if jqmWindow.recursiveGetChildById then
+    local ok, widget = pcall(function() return jqmWindow:recursiveGetChildById(id) end)
+    if ok and widget then return widget end
+  end
   for _, parentId in ipairs({ "headerPanel", "listPanel", "helpPanel", "footer" }) do
     local panel = jqmWindow[parentId]
     if panel and panel[id] then return panel[id] end
@@ -97,6 +108,20 @@ local function jqmSetOn(widget, value)
     pcall(function() widget:setOn(value == true) end)
   elseif widget and widget.setChecked then
     pcall(function() widget:setChecked(value == true) end)
+  end
+end
+
+local function jqmSetColor(widget, color)
+  if widget and widget.setColor then
+    pcall(function() widget:setColor(color) end)
+  end
+end
+
+local function jqmSetBackground(widget, color)
+  if widget and widget.setBackgroundColor then
+    pcall(function() widget:setBackgroundColor(color) end)
+  elseif widget and widget.setImageColor then
+    pcall(function() widget:setImageColor(color) end)
   end
 end
 
@@ -155,16 +180,61 @@ local function jqmScriptLabel(scriptName)
   return tostring(scriptName or "")
 end
 
+local function jqmScriptItem(scriptName)
+  for _, item in ipairs(JQM_SCRIPTS) do
+    if item.name == scriptName then return item end
+  end
+  return nil
+end
+
+local function jqmModuleStatus(scriptName)
+  if jqmRuntimeLoaded[scriptName] == true then
+    return "Ativo", "#76ff9f", "#183820dd", "#dfffeb"
+  end
+  if storage.JQMScriptManager.selected[scriptName] == true then
+    return "Pausado", "#ffd36b", "#2d2617dd", "#ffe6a3"
+  end
+  return "Inativo", "#ff6f6f", "#171b22dd", "#cfd8e3"
+end
+
 local function jqmSetManagerStatus(text)
   jqmSetText(jqmLauncher and jqmLauncher.status, text)
   jqmSetText(jqmWindowControl("status"), text)
 end
 
+local function jqmUpdateModuleCard(item, hover)
+  if not item then return end
+  local prefix = JQM_CARD_PREFIX[item.name]
+  if not prefix then return end
+
+  local card = jqmWindowControl(prefix .. "Card")
+  local icon = jqmWindowControl(prefix .. "Icon")
+  local title = jqmWindowControl(prefix .. "Title")
+  local desc = jqmWindowControl(prefix .. "Desc")
+  local badge = jqmWindowControl(prefix .. "Badge")
+  local gear = jqmWindowControl(prefix .. "Gear")
+  local statusText, statusColor, bgColor, titleColor = jqmModuleStatus(item.name)
+
+  if hover == true then
+    bgColor = "#243041ee"
+    titleColor = "#ffffff"
+  end
+
+  jqmSetText(icon, item.icon or "")
+  jqmSetText(title, item.label)
+  jqmSetText(desc, item.file or item.desc or "")
+  jqmSetText(badge, statusText)
+  jqmSetColor(badge, statusColor)
+  jqmSetColor(title, titleColor)
+  jqmSetColor(icon, statusColor)
+  jqmSetColor(desc, "#9fb2c4")
+  jqmSetColor(gear, hover and "#ffd36b" or "#dce4ee")
+  jqmSetBackground(card, bgColor)
+end
+
 local function jqmRefreshManagerUi()
   for _, item in ipairs(JQM_SCRIPTS) do
-    local switchId = JQM_SWITCH_IDS[item.name]
-    local widget = switchId and jqmWindowControl(switchId)
-    jqmSetOn(widget, storage.JQMScriptManager.selected[item.name] == true)
+    jqmUpdateModuleCard(item, false)
   end
   jqmSetText(jqmLauncher and jqmLauncher.status, jqmMainSummary())
   jqmSetText(jqmWindowControl("status"), jqmSelectedSummary())
@@ -207,45 +277,73 @@ local function jqmEnsureLoadedRow(scriptName)
   local ok, row = pcall(function()
     return setupUI([[
 Panel
-  height: 24
-  margin-top: 3
-  padding: 3
+  height: 36
+  margin-top: 4
+  padding: 4
   image-source: /images/ui/panel_flat
   image-border: 5
+  background-color: #151a20dd
+
+  Label
+    id: icon
+    anchors.left: parent.left
+    anchors.top: parent.top
+    width: 20
+    height: 28
+    text-align: center
+    color: #ffd36b
+    font: verdana-11px-bold
 
   Label
     id: title
-    anchors.left: parent.left
-    anchors.right: state.left
+    anchors.left: icon.right
+    anchors.right: gear.left
     anchors.top: parent.top
-    margin-left: 5
+    margin-left: 3
     margin-right: 4
-    height: 18
+    height: 15
     text-align: left
     color: #e8fff0
     font: verdana-11px-bold
 
   Label
     id: state
-    anchors.right: parent.right
-    anchors.top: parent.top
-    margin-right: 3
-    width: 28
-    height: 18
-    text-align: center
+    anchors.left: icon.right
+    anchors.right: gear.left
+    anchors.top: title.bottom
+    margin-left: 3
+    margin-top: 1
+    height: 13
+    text-align: left
     color: #76ff9f
     font: verdana-11px-bold
-    text: ON
+
+  Button
+    id: gear
+    anchors.right: parent.right
+    anchors.top: parent.top
+    width: 30
+    height: 28
+    text: CFG
 ]], tab)
   end)
   if not ok or not row then return nil end
 
   jqmLoadedRows[scriptName] = row
+  if row.icon then
+    jqmSetText(row.icon, item.icon or "")
+  end
   if row.title then
     jqmSetText(row.title, item.short or item.label)
   end
   if row.state then
-    jqmSetText(row.state, "ON")
+    jqmSetText(row.state, "Ativo")
+    jqmSetColor(row.state, "#76ff9f")
+  end
+  if row.gear then
+    row.gear.onClick = function()
+      if type(jqmOpenManager) == "function" then jqmOpenManager() end
+    end
   end
   return row
 end
@@ -634,20 +732,21 @@ local function jqmLoadManagerUi()
   local ok = pcall(function()
     g_ui.loadUIFromString([[
 DerpetsonScriptHubPanel < Panel
-  height: 58
+  height: 66
   margin-top: 4
-  padding: 4
+  padding: 5
   image-source: /images/ui/panel_flat
   image-border: 5
+  background-color: #111820dd
 
   Label
     id: title
     anchors.top: parent.top
     anchors.left: parent.left
     anchors.right: open.left
-    margin-right: 4
+    margin-right: 5
     height: 15
-    text-align: center
+    text-align: left
     color: #ffd36b
     font: verdana-11px-bold
     text: DERPETSON
@@ -658,12 +757,12 @@ DerpetsonScriptHubPanel < Panel
     anchors.left: parent.left
     anchors.right: open.left
     margin-top: 1
-    margin-right: 4
+    margin-right: 5
     height: 14
-    text-align: center
+    text-align: left
     color: #dce4ee
     font: verdana-11px
-    text: scripts
+    text: scripts premium
 
   Label
     id: status
@@ -671,9 +770,9 @@ DerpetsonScriptHubPanel < Panel
     anchors.left: parent.left
     anchors.right: open.left
     margin-top: 2
-    margin-right: 4
-    height: 14
-    text-align: center
+    margin-right: 5
+    height: 16
+    text-align: left
     color: #7ee8a8
     font: verdana-11px-bold
     text: Selecionar scripts
@@ -682,14 +781,14 @@ DerpetsonScriptHubPanel < Panel
     id: open
     anchors.top: parent.top
     anchors.right: parent.right
-    width: 48
-    height: 46
+    width: 36
+    height: 54
     text-align: center
-    text: Abrir
+    text: CFG
 
 DerpetsonScriptsWindow < MainWindow
   text: Derpetson Scripts
-  size: 420 365
+  size: 430 455
   padding: 10
   @onEscape: self:hide()
 
@@ -698,10 +797,11 @@ DerpetsonScriptsWindow < MainWindow
     anchors.top: parent.top
     anchors.left: parent.left
     anchors.right: parent.right
-    height: 62
+    height: 66
     image-source: /images/ui/panel_flat
     image-border: 5
     padding: 7
+    background-color: #111820ee
 
     Label
       id: title
@@ -724,7 +824,7 @@ DerpetsonScriptsWindow < MainWindow
       text-align: center
       color: #e8edf4
       font: verdana-11px
-      text: Clique no produto para carregar; use o botao real dele na Main
+      text: Addon premium para modulos liberados
 
     Label
       id: status
@@ -744,75 +844,312 @@ DerpetsonScriptsWindow < MainWindow
     anchors.left: parent.left
     anchors.right: parent.right
     margin-top: 9
-    height: 138
+    height: 278
     image-source: /images/ui/panel_flat
     image-border: 5
-    padding: 8
+    padding: 7
+    background-color: #0f141bdd
 
-    BotSwitch
-      id: comboSwitch
+    Label
+      id: combatCategory
       anchors.top: parent.top
       anchors.left: parent.left
       anchors.right: parent.right
-      height: 24
-      text-align: center
-      text: COMBO ESPART V3
+      height: 15
+      color: #ffd36b
+      font: verdana-11px-bold
+      text: [ATK] COMBATE
+
+    Panel
+      id: comboCard
+      anchors.top: combatCategory.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      margin-top: 3
+      height: 43
+      padding: 5
+      image-source: /images/ui/panel_flat
+      image-border: 5
+      background-color: #171b22dd
+
+      Label
+        id: comboIcon
+        anchors.left: parent.left
+        anchors.top: parent.top
+        width: 28
+        height: 32
+        text-align: center
+        color: #ffd36b
+        font: verdana-11px-bold
+        text: ATK
+
+      Label
+        id: comboTitle
+        anchors.left: comboIcon.right
+        anchors.right: comboBadge.left
+        anchors.top: parent.top
+        margin-left: 4
+        margin-right: 4
+        height: 16
+        color: #cfd8e3
+        font: verdana-11px-bold
+        text: COMBO ESPART V3
+
+      Label
+        id: comboDesc
+        anchors.left: comboIcon.right
+        anchors.right: comboGear.left
+        anchors.top: comboTitle.bottom
+        margin-left: 4
+        margin-top: 1
+        height: 14
+        color: #9fb2c4
+        font: verdana-11px
+        text: COMBO_ESPART_V3.lua
+
+      Label
+        id: comboBadge
+        anchors.right: comboGear.left
+        anchors.top: parent.top
+        margin-right: 4
+        width: 48
+        height: 16
+        text-align: center
+        color: #ff6f6f
+        font: verdana-11px-bold
+        text: Inativo
+
+      Button
+        id: comboGear
+        anchors.right: parent.right
+        anchors.top: parent.top
+        width: 30
+        height: 32
+        text: CFG
 
     Label
-      id: comboDesc
-      anchors.top: comboSwitch.bottom
+      id: castleCategory
+      anchors.top: comboCard.bottom
       anchors.left: parent.left
       anchors.right: parent.right
-      margin-top: 1
+      margin-top: 8
       height: 15
-      text-align: center
-      color: #9fb2c4
-      font: verdana-11px
-      text: COMBO_ESPART_V3.lua
+      color: #ffd36b
+      font: verdana-11px-bold
+      text: [CST] CASTLE
 
-    BotSwitch
-      id: holidaySwitch
-      anchors.top: comboDesc.bottom
+    Panel
+      id: castleCard
+      anchors.top: castleCategory.bottom
       anchors.left: parent.left
       anchors.right: parent.right
-      margin-top: 6
-      height: 24
-      text-align: center
-      text: HOLIDAY AOE
+      margin-top: 3
+      height: 43
+      padding: 5
+      image-source: /images/ui/panel_flat
+      image-border: 5
+      background-color: #171b22dd
+
+      Label
+        id: castleIcon
+        anchors.left: parent.left
+        anchors.top: parent.top
+        width: 28
+        height: 32
+        text-align: center
+        color: #ffd36b
+        font: verdana-11px-bold
+        text: CST
+
+      Label
+        id: castleTitle
+        anchors.left: castleIcon.right
+        anchors.right: castleBadge.left
+        anchors.top: parent.top
+        margin-left: 4
+        margin-right: 4
+        height: 16
+        color: #cfd8e3
+        font: verdana-11px-bold
+        text: CASTLE PRO
+
+      Label
+        id: castleDesc
+        anchors.left: castleIcon.right
+        anchors.right: castleGear.left
+        anchors.top: castleTitle.bottom
+        margin-left: 4
+        margin-top: 1
+        height: 14
+        color: #9fb2c4
+        font: verdana-11px
+        text: CASTLE_MANAGER_LOGOUT.lua
+
+      Label
+        id: castleBadge
+        anchors.right: castleGear.left
+        anchors.top: parent.top
+        margin-right: 4
+        width: 48
+        height: 16
+        text-align: center
+        color: #ff6f6f
+        font: verdana-11px-bold
+        text: Inativo
+
+      Button
+        id: castleGear
+        anchors.right: parent.right
+        anchors.top: parent.top
+        width: 30
+        height: 32
+        text: CFG
 
     Label
-      id: holidayDesc
-      anchors.top: holidaySwitch.bottom
+      id: defenseCategory
+      anchors.top: castleCard.bottom
       anchors.left: parent.left
       anchors.right: parent.right
-      margin-top: 1
+      margin-top: 8
       height: 15
-      text-align: center
-      color: #9fb2c4
-      font: verdana-11px
-      text: holiday_aoe.lua
+      color: #ffd36b
+      font: verdana-11px-bold
+      text: [DEF] DEFESA
 
-    BotSwitch
-      id: castleSwitch
-      anchors.top: holidayDesc.bottom
+    Panel
+      id: holidayCard
+      anchors.top: defenseCategory.bottom
       anchors.left: parent.left
       anchors.right: parent.right
-      margin-top: 6
-      height: 24
-      text-align: center
-      text: CASTLE PRO
+      margin-top: 3
+      height: 43
+      padding: 5
+      image-source: /images/ui/panel_flat
+      image-border: 5
+      background-color: #171b22dd
+
+      Label
+        id: holidayIcon
+        anchors.left: parent.left
+        anchors.top: parent.top
+        width: 28
+        height: 32
+        text-align: center
+        color: #ffd36b
+        font: verdana-11px-bold
+        text: DEF
+
+      Label
+        id: holidayTitle
+        anchors.left: holidayIcon.right
+        anchors.right: holidayBadge.left
+        anchors.top: parent.top
+        margin-left: 4
+        margin-right: 4
+        height: 16
+        color: #cfd8e3
+        font: verdana-11px-bold
+        text: HOLIDAY AOE
+
+      Label
+        id: holidayDesc
+        anchors.left: holidayIcon.right
+        anchors.right: holidayGear.left
+        anchors.top: holidayTitle.bottom
+        margin-left: 4
+        margin-top: 1
+        height: 14
+        color: #9fb2c4
+        font: verdana-11px
+        text: holiday_aoe.lua
+
+      Label
+        id: holidayBadge
+        anchors.right: holidayGear.left
+        anchors.top: parent.top
+        margin-right: 4
+        width: 48
+        height: 16
+        text-align: center
+        color: #ff6f6f
+        font: verdana-11px-bold
+        text: Inativo
+
+      Button
+        id: holidayGear
+        anchors.right: parent.right
+        anchors.top: parent.top
+        width: 30
+        height: 32
+        text: CFG
 
     Label
-      id: castleDesc
-      anchors.top: castleSwitch.bottom
+      id: utilityCategory
+      anchors.top: holidayCard.bottom
       anchors.left: parent.left
       anchors.right: parent.right
-      margin-top: 1
+      margin-top: 8
       height: 15
-      text-align: center
-      color: #9fb2c4
-      font: verdana-11px
-      text: CASTLE_MANAGER_LOGOUT.lua
+      color: #ffd36b
+      font: verdana-11px-bold
+      text: [CFG] UTILIDADES
+
+    Panel
+      id: updateCard
+      anchors.top: utilityCategory.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      margin-top: 3
+      height: 34
+      padding: 5
+      image-source: /images/ui/panel_flat
+      image-border: 5
+      background-color: #151a20dd
+
+      Label
+        id: updateIcon
+        anchors.left: parent.left
+        anchors.top: parent.top
+        width: 28
+        height: 24
+        text-align: center
+        color: #ffd36b
+        font: verdana-11px-bold
+        text: CFG
+
+      Label
+        id: updateTitle
+        anchors.left: updateIcon.right
+        anchors.right: updateBadge.left
+        anchors.top: parent.top
+        margin-left: 4
+        margin-right: 4
+        height: 15
+        color: #e8fff0
+        font: verdana-11px-bold
+        text: Atualizador
+
+      Label
+        id: updateDesc
+        anchors.left: updateIcon.right
+        anchors.right: updateBadge.left
+        anchors.top: updateTitle.bottom
+        margin-left: 4
+        height: 12
+        color: #9fb2c4
+        font: verdana-11px
+        text: Jequi remoto
+
+      Label
+        id: updateBadge
+        anchors.right: parent.right
+        anchors.top: parent.top
+        width: 48
+        height: 16
+        text-align: center
+        color: #76ff9f
+        font: verdana-11px-bold
+        text: Ativo
 
   Panel
     id: helpPanel
@@ -820,7 +1157,7 @@ DerpetsonScriptsWindow < MainWindow
     anchors.left: parent.left
     anchors.right: parent.right
     margin-top: 8
-    height: 62
+    height: 40
     background-color: #101620dd
 
     Label
@@ -833,7 +1170,7 @@ DerpetsonScriptsWindow < MainWindow
       text-align: center
       color: #ffd36b
       font: verdana-11px-bold
-      text: Como usar
+      text: Status
 
     Label
       id: helpLine1
@@ -845,19 +1182,7 @@ DerpetsonScriptsWindow < MainWindow
       text-align: center
       color: #dce4ee
       font: verdana-11px
-      text: 1. Clique no produto verde para carregar na hora.
-
-    Label
-      id: helpLine2
-      anchors.top: helpLine1.bottom
-      anchors.left: parent.left
-      anchors.right: parent.right
-      margin-top: 2
-      height: 15
-      text-align: center
-      color: #9fb2c4
-      font: verdana-11px
-      text: 2. Use Limpar apenas para desmarcar a selecao.
+      text: Ativo / Pausado / Inativo
 
   Panel
     id: footer
@@ -936,21 +1261,42 @@ local function jqmCreateWindow()
   if jqmWindowControl("clearButton") then
     jqmWindowControl("clearButton").onClick = function() jqmSetAllSelected(false) end
   end
-  if jqmWindowControl("comboSwitch") then
-    jqmWindowControl("comboSwitch").onClick = function() jqmActivateSelected("combo") end
+  local function bindModuleCard(scriptName)
+    local item = jqmScriptItem(scriptName)
+    local prefix = JQM_CARD_PREFIX[scriptName]
+    if not item or not prefix then return end
+
+    local function loadModule()
+      jqmActivateSelected(scriptName)
+    end
+    local function hoverModule(_, hovered)
+      jqmUpdateModuleCard(item, hovered == true)
+    end
+
+    for _, suffix in ipairs({ "Card", "Icon", "Title", "Desc", "Badge" }) do
+      local widget = jqmWindowControl(prefix .. suffix)
+      if widget then
+        widget.onClick = loadModule
+        widget.onHoverChange = hoverModule
+      end
+    end
+
+    local gear = jqmWindowControl(prefix .. "Gear")
+    if gear then
+      gear.onClick = loadModule
+      gear.onHoverChange = hoverModule
+    end
   end
-  if jqmWindowControl("holidaySwitch") then
-    jqmWindowControl("holidaySwitch").onClick = function() jqmActivateSelected("holiday_aoe") end
-  end
-  if jqmWindowControl("castleSwitch") then
-    jqmWindowControl("castleSwitch").onClick = function() jqmActivateSelected("castle_manager") end
-  end
+
+  bindModuleCard("combo")
+  bindModuleCard("castle_manager")
+  bindModuleCard("holiday_aoe")
 
   jqmRefreshManagerUi()
   return jqmWindow
 end
 
-local function jqmOpenManager()
+jqmOpenManager = function()
   local window = jqmCreateWindow()
   if window then
     jqmRefreshManagerUi()

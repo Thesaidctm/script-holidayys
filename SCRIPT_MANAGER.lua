@@ -15,7 +15,7 @@ local function jqmGlobals()
 end
 
 local jqmGlobal = jqmGlobals()
-local JQM_MANAGER_VERSION = 2026061204
+local JQM_MANAGER_VERSION = 2026061205
 if jqmGlobal.JQMScriptManagerVersion == JQM_MANAGER_VERSION then
   if type(jqmGlobal.JQMOpenManager) == "function" then jqmGlobal.JQMOpenManager() end
   return
@@ -316,20 +316,30 @@ local function jqmRunInManagerTab(fn)
   local originalParent = parent
   local managerTab = jqmEnsureManagerTab()
 
+  local function selectManagerTab()
+    local tab = nil
+    if type(originalSetDefaultTab) == "function" then
+      local ok, value = pcall(function() return originalSetDefaultTab(JQM_MANAGER_TAB) end)
+      if ok and value then tab = value end
+    end
+    if not tab then tab = jqmEnsureManagerTab() end
+    if tab then
+      jqmManagerTab = tab
+      parent = tab
+    end
+    return tab
+  end
+
   local function forcedGetTab()
-    return jqmEnsureManagerTab()
+    if type(originalGetTab) == "function" then
+      local ok, tab = pcall(function() return originalGetTab(JQM_MANAGER_TAB) end)
+      if ok and tab then return tab end
+    end
+    return selectManagerTab()
   end
 
   local function forcedSetDefaultTab()
-    local tab = jqmEnsureManagerTab()
-    if tab then
-      parent = tab
-      return tab
-    end
-    if type(originalSetDefaultTab) == "function" then
-      return originalSetDefaultTab(JQM_MANAGER_TAB)
-    end
-    return nil
+    return selectManagerTab()
   end
 
   if type(originalSetDefaultTab) == "function" then
@@ -338,7 +348,7 @@ local function jqmRunInManagerTab(fn)
   if type(originalGetTab) == "function" then
     getTab = forcedGetTab
   end
-  if managerTab then parent = managerTab end
+  selectManagerTab()
 
   local ok, err = pcall(fn)
 

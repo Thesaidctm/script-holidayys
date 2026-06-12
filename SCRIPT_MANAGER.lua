@@ -15,7 +15,7 @@ local function jqmGlobals()
 end
 
 local jqmGlobal = jqmGlobals()
-local JQM_MANAGER_VERSION = 2026061225
+local JQM_MANAGER_VERSION = 2026061226
 if jqmGlobal.JQMScriptManagerVersion == JQM_MANAGER_VERSION and type(jqmGlobal.JQMOpenManager) == "function" then
   jqmGlobal.JQMOpenManager()
   return
@@ -69,6 +69,8 @@ local jqmCreateWindow = nil
 local jqmScriptLabel = nil
 local jqmScriptItem = nil
 local jqmWarn = nil
+local jqmPrepareProxySetup = nil
+local jqmEnsureLoadedRow = nil
 
 local function jqmEnsureManagerTab()
   if jqmManagerTab then return jqmManagerTab end
@@ -195,9 +197,13 @@ local function jqmMarkNativeReady(scriptName, row)
   jqmNativeRows[scriptName] = row or jqmNativeRows[scriptName]
   local prefix = JQM_CARD_PREFIX[scriptName]
   if prefix then
-    jqmSetVisible(jqmWindowControl(prefix .. "Hint"), false)
-    jqmSetVisible(jqmWindowControl(prefix .. "Load"), false)
     jqmSetText(jqmWindowControl(prefix .. "Gear"), "CFG")
+    if type(jqmPrepareProxySetup) == "function" then
+      jqmPrepareProxySetup(scriptName)
+    else
+      jqmSetVisible(jqmWindowControl(prefix .. "Hint"), true)
+      jqmSetVisible(jqmWindowControl(prefix .. "Load"), true)
+    end
   end
 end
 
@@ -263,7 +269,7 @@ local function jqmOpenNativeSetup(scriptName)
   return false
 end
 
-local function jqmPrepareProxySetup(scriptName)
+jqmPrepareProxySetup = function(scriptName)
   local item = jqmScriptItem(scriptName)
   local prefix = JQM_CARD_PREFIX[scriptName]
   if not item or not prefix then return end
@@ -395,6 +401,10 @@ end
 local function jqmRefreshManagerUi()
   for _, item in ipairs(JQM_SCRIPTS) do
     jqmUpdateModuleCard(item, false)
+    if jqmRuntimeLoaded[item.name] == true then
+      jqmEnsureLoadedRow(item.name)
+      jqmPrepareProxySetup(item.name)
+    end
   end
   jqmSetText(jqmChild(jqmLauncher, "status") or jqmChild(jqmLauncher, "subtitle"), jqmMainSummary())
   jqmSetText(jqmWindowControl("status"), jqmSelectedSummary())
@@ -417,7 +427,7 @@ local function jqmSetAllSelected(value)
   jqmRefreshManagerUi()
 end
 
-local function jqmEnsureLoadedRow(scriptName)
+jqmEnsureLoadedRow = function(scriptName)
   if jqmNativeRows[scriptName] then return jqmNativeRows[scriptName] end
   local existing = jqmFindExistingNativeRow(scriptName)
   if existing then

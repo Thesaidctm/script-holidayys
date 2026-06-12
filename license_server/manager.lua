@@ -15,7 +15,7 @@ local function jqmGlobals()
 end
 
 local jqmGlobal = jqmGlobals()
-local JQM_MANAGER_VERSION = 2026061215
+local JQM_MANAGER_VERSION = 2026061216
 if jqmGlobal.JQMScriptManagerVersion == JQM_MANAGER_VERSION then
   if type(jqmGlobal.JQMOpenManager) == "function" then jqmGlobal.JQMOpenManager() end
   return
@@ -159,6 +159,7 @@ local function jqmMarkNativeReady(scriptName, row)
   local prefix = JQM_CARD_PREFIX[scriptName]
   if prefix then
     jqmSetVisible(jqmWindowControl(prefix .. "Hint"), false)
+    jqmSetVisible(jqmWindowControl(prefix .. "Load"), false)
     jqmSetText(jqmWindowControl(prefix .. "Gear"), "SET")
   end
 end
@@ -772,14 +773,14 @@ DerpetsonScriptHubPanel < Panel
     id: open
     anchors.top: parent.top
     anchors.right: parent.right
-    width: 36
+    width: 50
     height: 54
     text-align: center
-    text: CFG
+    text: Abrir
 
 DerpetsonScriptsWindow < MainWindow
   text: Derpetson Scripts
-  size: 500 550
+  size: 500 635
   padding: 10
   @onEscape: self:hide()
 
@@ -835,7 +836,7 @@ DerpetsonScriptsWindow < MainWindow
     anchors.left: parent.left
     anchors.right: parent.right
     margin-top: 9
-    height: 360
+    height: 455
     image-source: /images/ui/panel_flat
     image-border: 5
     padding: 7
@@ -857,7 +858,7 @@ DerpetsonScriptsWindow < MainWindow
       anchors.left: parent.left
       anchors.right: parent.right
       margin-top: 3
-      height: 90
+      height: 110
       padding: 5
       image-source: /images/ui/panel_flat
       image-border: 5
@@ -868,7 +869,7 @@ DerpetsonScriptsWindow < MainWindow
         anchors.left: parent.left
         anchors.top: parent.top
         width: 28
-        height: 78
+        height: 98
         text-align: center
         color: #ffd36b
         font: verdana-11px-bold
@@ -924,23 +925,32 @@ DerpetsonScriptsWindow < MainWindow
         anchors.right: parent.right
         anchors.top: comboDesc.bottom
         margin-top: 6
-        height: 44
+        height: 60
         padding: 1
         image-source: /images/ui/panel_flat
         image-border: 5
         background-color: #0d121add
 
+        Button
+          id: comboLoad
+          anchors.left: parent.left
+          anchors.right: parent.right
+          anchors.top: parent.top
+          margin: 4
+          height: 28
+          text: Iniciar COMBO ESPART
+
         Label
           id: comboHint
           anchors.left: parent.left
           anchors.right: parent.right
-          anchors.top: parent.top
-          margin-top: 8
+          anchors.top: comboLoad.bottom
+          margin-top: 2
           height: 16
           text-align: center
           color: #9fb2c4
           font: verdana-11px
-          text: Carregue para mostrar o Setup original
+          text: depois o Setup original aparece aqui
 
     Label
       id: castleCategory
@@ -959,7 +969,7 @@ DerpetsonScriptsWindow < MainWindow
       anchors.left: parent.left
       anchors.right: parent.right
       margin-top: 3
-      height: 90
+      height: 110
       padding: 5
       image-source: /images/ui/panel_flat
       image-border: 5
@@ -970,7 +980,7 @@ DerpetsonScriptsWindow < MainWindow
         anchors.left: parent.left
         anchors.top: parent.top
         width: 28
-        height: 78
+        height: 98
         text-align: center
         color: #ffd36b
         font: verdana-11px-bold
@@ -1026,23 +1036,32 @@ DerpetsonScriptsWindow < MainWindow
         anchors.right: parent.right
         anchors.top: castleDesc.bottom
         margin-top: 6
-        height: 44
+        height: 60
         padding: 1
         image-source: /images/ui/panel_flat
         image-border: 5
         background-color: #0d121add
 
+        Button
+          id: castleLoad
+          anchors.left: parent.left
+          anchors.right: parent.right
+          anchors.top: parent.top
+          margin: 4
+          height: 28
+          text: Iniciar CASTLE PRO
+
         Label
           id: castleHint
           anchors.left: parent.left
           anchors.right: parent.right
-          anchors.top: parent.top
-          margin-top: 8
+          anchors.top: castleLoad.bottom
+          margin-top: 2
           height: 16
           text-align: center
           color: #9fb2c4
           font: verdana-11px
-          text: Carregue para mostrar o Setup original
+          text: depois o Setup original aparece aqui
 
     Label
       id: defenseCategory
@@ -1061,7 +1080,7 @@ DerpetsonScriptsWindow < MainWindow
       anchors.left: parent.left
       anchors.right: parent.right
       margin-top: 3
-      height: 90
+      height: 110
       padding: 5
       image-source: /images/ui/panel_flat
       image-border: 5
@@ -1072,7 +1091,7 @@ DerpetsonScriptsWindow < MainWindow
         anchors.left: parent.left
         anchors.top: parent.top
         width: 28
-        height: 78
+        height: 98
         text-align: center
         color: #ffd36b
         font: verdana-11px-bold
@@ -1128,23 +1147,32 @@ DerpetsonScriptsWindow < MainWindow
         anchors.right: parent.right
         anchors.top: holidayDesc.bottom
         margin-top: 6
-        height: 44
+        height: 60
         padding: 1
         image-source: /images/ui/panel_flat
         image-border: 5
         background-color: #0d121add
 
+        Button
+          id: holidayLoad
+          anchors.left: parent.left
+          anchors.right: parent.right
+          anchors.top: parent.top
+          margin: 4
+          height: 28
+          text: Iniciar HOLIDAY AOE
+
         Label
           id: holidayHint
           anchors.left: parent.left
           anchors.right: parent.right
-          anchors.top: parent.top
-          margin-top: 8
+          anchors.top: holidayLoad.bottom
+          margin-top: 2
           height: 16
           text-align: center
           color: #9fb2c4
           font: verdana-11px
-          text: Carregue para mostrar o Setup original
+          text: depois o Setup original aparece aqui
 
     Label
       id: utilityCategory
@@ -1295,7 +1323,7 @@ DerpetsonScriptsWindow < MainWindow
   return jqmUiLoaded
 end
 
-local function jqmCreateWindow()
+jqmCreateWindow = function()
   if jqmWindow then return jqmWindow end
   if not jqmLoadManagerUi() or not UI or not UI.createWindow then return nil end
 
@@ -1354,6 +1382,12 @@ local function jqmCreateWindow()
     if gear then
       gear.onClick = setupOrLoadModule
       gear.onHoverChange = hoverModule
+    end
+
+    local loadButton = jqmWindowControl(prefix .. "Load")
+    if loadButton then
+      loadButton.onClick = loadModule
+      loadButton.onHoverChange = hoverModule
     end
   end
 

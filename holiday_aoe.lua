@@ -2,7 +2,7 @@
 -- Compatibilidade: clientes antigos que ainda carregam este arquivo agora abrem
 -- apenas o Derpetson Scripts, onde todos os produtos ficam em uma aba unica.
 
-local JQM_MANAGER_URL = "https://jequimultiassessoria.com.br/license_server/manager.lua?v=2026061215"
+local JQM_MANAGER_URL = "https://jequimultiassessoria.com.br/license_server/manager.lua?v=2026061216"
 
 local function jqmGlobals()
   if type(_G) == "table" then return _G end
@@ -105,4 +105,57 @@ local function jqmLoadManager()
   end)
 end
 
+local function jqmEnsureBridgeLauncher()
+  if jqmGlobal.JQMScriptManagerBridgeLauncher then return end
+  if type(setupUI) ~= "function" then return end
+  local ok, row = pcall(function()
+    return setupUI([[
+Panel
+  height: 50
+  margin-top: 4
+  padding: 5
+  image-source: /images/ui/panel_flat
+  image-border: 5
+  background-color: #111820dd
+
+  Label
+    id: title
+    anchors.left: parent.left
+    anchors.top: parent.top
+    anchors.right: open.left
+    margin-right: 5
+    height: 16
+    color: #ffd36b
+    font: verdana-11px-bold
+    text: Derpetson Scripts
+
+  Label
+    id: subtitle
+    anchors.left: parent.left
+    anchors.top: title.bottom
+    anchors.right: open.left
+    margin-right: 5
+    height: 15
+    color: #7ee8a8
+    font: verdana-11px
+    text: iniciar / configurar
+
+  Button
+    id: open
+    anchors.right: parent.right
+    anchors.top: parent.top
+    width: 54
+    height: 38
+    text: Abrir
+]])
+  end)
+  if ok and row then
+    jqmGlobal.JQMScriptManagerBridgeLauncher = row
+    if row.open then row.open.onClick = jqmLoadManager end
+    if row.title then row.title.onClick = jqmLoadManager end
+    if row.subtitle then row.subtitle.onClick = jqmLoadManager end
+  end
+end
+
+jqmEnsureBridgeLauncher()
 jqmLoadManager()

@@ -36,6 +36,7 @@ end
 
 storage.JQMScriptManager = type(storage.JQMScriptManager) == "table" and storage.JQMScriptManager or {}
 storage.JQMScriptManager.selected = type(storage.JQMScriptManager.selected) == "table" and storage.JQMScriptManager.selected or {}
+storage.JQMScriptManager.loaded = type(storage.JQMScriptManager.loaded) == "table" and storage.JQMScriptManager.loaded or {}
 storage.Combo = type(storage.Combo) == "table" and storage.Combo or {}
 storage.Combo.licenseKey = storage.Combo.licenseKey or ""
 
@@ -82,6 +83,13 @@ local function jqmSelectedSummary()
   if #labels == 0 then return "Nenhum script selecionado" end
   if #labels == 1 then return labels[1] end
   return tostring(#labels) .. " scripts selecionados"
+end
+
+local function jqmScriptLabel(scriptName)
+  for _, item in ipairs(JQM_SCRIPTS) do
+    if item.name == scriptName then return item.label end
+  end
+  return tostring(scriptName or "")
 end
 
 local function jqmSetManagerStatus(text)
@@ -287,7 +295,9 @@ local function jqmRunPayload(scriptName, data)
     jqmWarn("erro no script: " .. tostring(runErr))
     return false
   end
-  jqmWarn("carregado: " .. tostring(scriptName))
+  storage.JQMScriptManager.loaded[scriptName] = true
+  jqmSetManagerStatus("Carregado. Use o Setup no painel esquerdo.")
+  jqmWarn("carregado: " .. jqmScriptLabel(scriptName))
   return true
 end
 
@@ -334,7 +344,7 @@ local function jqmRequestOrLoad()
         jqmWarn("nenhum script liberado para este MAC.")
         return
       end
-      jqmSetManagerStatus("Carregando " .. tostring(#allowed) .. " script(s)")
+      jqmSetManagerStatus("Carregando selecionados...")
       jqmWarn("liberado. carregando scripts.")
       for _, scriptName in ipairs(allowed) do
         JQMLoadScript(scriptName)
@@ -354,7 +364,7 @@ local function jqmLoadManagerUi()
   local ok = pcall(function()
     g_ui.loadUIFromString([[
 DerpetsonScriptHubPanel < Panel
-  height: 70
+  height: 76
   margin-top: 4
   padding: 4
   image-source: /images/ui/panel_flat
@@ -403,13 +413,13 @@ DerpetsonScriptHubPanel < Panel
     anchors.top: parent.top
     anchors.right: parent.right
     width: 52
-    height: 58
+    height: 64
     text-align: center
-    text: Abrir
+    text: Central
 
 DerpetsonScriptsWindow < MainWindow
   text: Derpetson Scripts
-  size: 395 330
+  size: 420 365
   padding: 10
   @onEscape: self:hide()
 
@@ -444,7 +454,7 @@ DerpetsonScriptsWindow < MainWindow
       text-align: center
       color: #e8edf4
       font: verdana-11px
-      text: Selecione os produtos que deseja usar
+      text: Selecione, carregue e configure pelo Setup de cada produto
 
     Label
       id: status
@@ -540,20 +550,44 @@ DerpetsonScriptsWindow < MainWindow
     anchors.left: parent.left
     anchors.right: parent.right
     margin-top: 8
-    height: 38
+    height: 62
     background-color: #101620dd
 
     Label
-      id: help
+      id: helpTitle
       anchors.top: parent.top
       anchors.left: parent.left
       anchors.right: parent.right
       margin-top: 5
-      height: 28
+      height: 15
+      text-align: center
+      color: #ffd36b
+      font: verdana-11px-bold
+      text: Como usar
+
+    Label
+      id: helpLine1
+      anchors.top: helpTitle.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      margin-top: 3
+      height: 15
       text-align: center
       color: #dce4ee
       font: verdana-11px
-      text: Sem liberacao, o pedido fica pendente e aparece no painel do servidor.
+      text: 1. Marque os scripts comprados e clique em Carregar.
+
+    Label
+      id: helpLine2
+      anchors.top: helpLine1.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      margin-top: 2
+      height: 15
+      text-align: center
+      color: #9fb2c4
+      font: verdana-11px
+      text: 2. Configure pelo botao Setup que aparece no painel esquerdo.
 
   Panel
     id: footer
@@ -587,7 +621,7 @@ DerpetsonScriptsWindow < MainWindow
       margin-left: 5
       margin-right: 5
       height: 24
-      text: Solicitar / Carregar
+      text: Carregar selecionados
 
     Button
       id: closeButton

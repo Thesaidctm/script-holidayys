@@ -15,7 +15,7 @@ local function jqmGlobals()
 end
 
 local jqmGlobal = jqmGlobals()
-local JQM_MANAGER_VERSION = 2026061210
+local JQM_MANAGER_VERSION = 2026061211
 if jqmGlobal.JQMScriptManagerVersion == JQM_MANAGER_VERSION then
   if type(jqmGlobal.JQMOpenManager) == "function" then jqmGlobal.JQMOpenManager() end
   return
@@ -35,9 +35,9 @@ jqmGlobal.JQMScriptManagerRuntimeLoaded = jqmRuntimeLoaded
 jqmGlobal.JQMScriptManagerRuntimeVersion = JQM_MANAGER_VERSION
 
 local JQM_SCRIPTS = {
-  { name = "combo", label = "COMBO_ESPART_V3.lua", desc = "Combo, runas e prioridades" },
-  { name = "holiday_aoe", label = "holiday_aoe.lua", desc = "Holiday AOE, area e PvP" },
-  { name = "castle_manager", label = "CASTLE_MANAGER_LOGOUT.lua", desc = "Castle, seguranca e logout" }
+  { name = "combo", label = "COMBO ESPART V3", short = "COMBO ESPART", file = "COMBO_ESPART_V3.lua", desc = "Combo, runas e prioridades" },
+  { name = "holiday_aoe", label = "HOLIDAY AOE", short = "HOLIDAY AOE", file = "holiday_aoe.lua", desc = "Area, combo e PvP" },
+  { name = "castle_manager", label = "CASTLE PRO", short = "CASTLE PRO", file = "CASTLE_MANAGER_LOGOUT.lua", desc = "Castle, seguranca e logout" }
 }
 
 local JQM_SWITCH_IDS = {
@@ -131,6 +131,23 @@ local function jqmSelectedSummary()
   return tostring(#labels) .. " scripts selecionados"
 end
 
+local function jqmLoadedCount()
+  local count = 0
+  for _, item in ipairs(JQM_SCRIPTS) do
+    if jqmRuntimeLoaded[item.name] == true then
+      count = count + 1
+    end
+  end
+  return count
+end
+
+local function jqmMainSummary()
+  local count = jqmLoadedCount()
+  if count == 1 then return "1 produto ativo" end
+  if count > 1 then return tostring(count) .. " produtos ativos" end
+  return "Selecionar scripts"
+end
+
 local function jqmScriptLabel(scriptName)
   for _, item in ipairs(JQM_SCRIPTS) do
     if item.name == scriptName then return item.label end
@@ -149,7 +166,7 @@ local function jqmRefreshManagerUi()
     local widget = switchId and jqmWindowControl(switchId)
     jqmSetOn(widget, storage.JQMScriptManager.selected[item.name] == true)
   end
-  jqmSetText(jqmLauncher and jqmLauncher.status, jqmSelectedSummary())
+  jqmSetText(jqmLauncher and jqmLauncher.status, jqmMainSummary())
   jqmSetText(jqmWindowControl("status"), jqmSelectedSummary())
 end
 
@@ -190,40 +207,45 @@ local function jqmEnsureLoadedRow(scriptName)
   local ok, row = pcall(function()
     return setupUI([[
 Panel
-  height: 20
-  margin-top: 2
+  height: 24
+  margin-top: 3
+  padding: 3
+  image-source: /images/ui/panel_flat
+  image-border: 5
 
-  BotSwitch
+  Label
     id: title
     anchors.left: parent.left
     anchors.right: state.left
     anchors.top: parent.top
-    margin-right: 2
+    margin-left: 5
+    margin-right: 4
     height: 18
-    text-align: center
-    color: #ffffff
+    text-align: left
+    color: #e8fff0
+    font: verdana-11px-bold
 
   Label
     id: state
     anchors.right: parent.right
     anchors.top: parent.top
-    width: 64
+    margin-right: 3
+    width: 28
     height: 18
     text-align: center
-    color: #7ee8a8
+    color: #76ff9f
     font: verdana-11px-bold
-    text: Carregado
+    text: ON
 ]], tab)
   end)
   if not ok or not row then return nil end
 
   jqmLoadedRows[scriptName] = row
   if row.title then
-    jqmSetText(row.title, item.label)
-    jqmSetOn(row.title, true)
+    jqmSetText(row.title, item.short or item.label)
   end
   if row.state then
-    jqmSetText(row.state, "Carregado")
+    jqmSetText(row.state, "ON")
   end
   return row
 end
@@ -506,7 +528,7 @@ local function jqmRunPayload(scriptName, data)
   jqmRuntimeLoaded[scriptName] = true
   storage.JQMScriptManager.loaded[scriptName] = true
   jqmEnsureLoadedRow(scriptName)
-  jqmSetManagerStatus("Carregado na Main")
+  jqmSetManagerStatus(jqmMainSummary())
   jqmWarn("carregado: " .. jqmScriptLabel(scriptName))
   return true
 end
@@ -612,7 +634,7 @@ local function jqmLoadManagerUi()
   local ok = pcall(function()
     g_ui.loadUIFromString([[
 DerpetsonScriptHubPanel < Panel
-  height: 76
+  height: 58
   margin-top: 4
   padding: 4
   image-source: /images/ui/panel_flat
@@ -624,11 +646,11 @@ DerpetsonScriptHubPanel < Panel
     anchors.left: parent.left
     anchors.right: open.left
     margin-right: 4
-    height: 16
+    height: 15
     text-align: center
     color: #ffd36b
     font: verdana-11px-bold
-    text: Derpetson
+    text: DERPETSON
 
   Label
     id: subtitle
@@ -654,14 +676,14 @@ DerpetsonScriptHubPanel < Panel
     text-align: center
     color: #7ee8a8
     font: verdana-11px-bold
-    text: Selecionar
+    text: Selecionar scripts
 
   Button
     id: open
     anchors.top: parent.top
     anchors.right: parent.right
-    width: 52
-    height: 64
+    width: 48
+    height: 46
     text-align: center
     text: Abrir
 
@@ -702,7 +724,7 @@ DerpetsonScriptsWindow < MainWindow
       text-align: center
       color: #e8edf4
       font: verdana-11px
-      text: Clique no produto para carregar; configure pelo botao do script
+      text: Clique no produto para carregar; use o botao real dele na Main
 
     Label
       id: status
@@ -734,7 +756,7 @@ DerpetsonScriptsWindow < MainWindow
       anchors.right: parent.right
       height: 24
       text-align: center
-      text: COMBO_ESPART_V3.lua
+      text: COMBO ESPART V3
 
     Label
       id: comboDesc
@@ -746,7 +768,7 @@ DerpetsonScriptsWindow < MainWindow
       text-align: center
       color: #9fb2c4
       font: verdana-11px
-      text: Combo, runas e prioridades
+      text: COMBO_ESPART_V3.lua
 
     BotSwitch
       id: holidaySwitch
@@ -756,7 +778,7 @@ DerpetsonScriptsWindow < MainWindow
       margin-top: 6
       height: 24
       text-align: center
-      text: holiday_aoe.lua
+      text: HOLIDAY AOE
 
     Label
       id: holidayDesc
@@ -768,7 +790,7 @@ DerpetsonScriptsWindow < MainWindow
       text-align: center
       color: #9fb2c4
       font: verdana-11px
-      text: Holiday AOE, area e PvP
+      text: holiday_aoe.lua
 
     BotSwitch
       id: castleSwitch
@@ -778,7 +800,7 @@ DerpetsonScriptsWindow < MainWindow
       margin-top: 6
       height: 24
       text-align: center
-      text: CASTLE_MANAGER_LOGOUT.lua
+      text: CASTLE PRO
 
     Label
       id: castleDesc
@@ -790,7 +812,7 @@ DerpetsonScriptsWindow < MainWindow
       text-align: center
       color: #9fb2c4
       font: verdana-11px
-      text: Castle, seguranca e logout
+      text: CASTLE_MANAGER_LOGOUT.lua
 
   Panel
     id: helpPanel

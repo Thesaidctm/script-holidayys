@@ -15,7 +15,7 @@ local function jqmGlobals()
 end
 
 local jqmGlobal = jqmGlobals()
-local JQM_MANAGER_VERSION = 2026061216
+local JQM_MANAGER_VERSION = 2026061217
 if jqmGlobal.JQMScriptManagerVersion == JQM_MANAGER_VERSION then
   if type(jqmGlobal.JQMOpenManager) == "function" then jqmGlobal.JQMOpenManager() end
   return
@@ -1411,7 +1411,59 @@ jqmOpenManager = function()
   jqmWarn("janela indisponivel neste cliente.")
 end
 
-if jqmLoadManagerUi() and UI and UI.createWidget then
+local function jqmCreateSetupLauncher()
+  if jqmLauncher or type(setupUI) ~= "function" then return false end
+  local okPanel, panel = pcall(function()
+    return setupUI([[
+Panel
+  height: 54
+  margin-top: 4
+  padding: 5
+  image-source: /images/ui/panel_flat
+  image-border: 5
+  background-color: #111820dd
+
+  Label
+    id: title
+    anchors.left: parent.left
+    anchors.top: parent.top
+    anchors.right: open.left
+    margin-right: 5
+    height: 16
+    color: #ffd36b
+    font: verdana-11px-bold
+    text: Derpetson Scripts
+
+  Label
+    id: status
+    anchors.left: parent.left
+    anchors.top: title.bottom
+    anchors.right: open.left
+    margin-right: 5
+    height: 16
+    color: #7ee8a8
+    font: verdana-11px-bold
+    text: Selecionar scripts
+
+  Button
+    id: open
+    anchors.right: parent.right
+    anchors.top: parent.top
+    width: 54
+    height: 40
+    text: Abrir
+]])
+  end)
+  if not okPanel or not panel then return false end
+  jqmLauncher = panel
+  if jqmLauncher.open then jqmLauncher.open.onClick = jqmOpenManager end
+  if jqmLauncher.title then jqmLauncher.title.onClick = jqmOpenManager end
+  if jqmLauncher.status then jqmLauncher.status.onClick = jqmOpenManager end
+  jqmRefreshManagerUi()
+  return true
+end
+
+if not jqmCreateSetupLauncher() and jqmLoadManagerUi() and UI and UI.createWidget then
   local okPanel, panel = pcall(function()
     if UI and UI.createWidget then
       return UI.createWidget("DerpetsonScriptHubPanel", jqmEnsureManagerTab())

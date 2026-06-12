@@ -1,6 +1,5 @@
--- Holiday AOE public bridge.
--- Compatibilidade: clientes antigos que ainda carregam este arquivo agora abrem
--- apenas o Derpetson Scripts, onde todos os produtos ficam em uma aba unica.
+-- Derpetson Scripts central bridge.
+-- Ponto fixo para abrir a central mesmo sem carregar um produto especifico.
 
 local JQM_MANAGER_URL = "https://jequimultiassessoria.com.br/license_server/manager.lua?v=2026061217"
 
@@ -111,7 +110,7 @@ local function jqmEnsureBridgeLauncher()
   local ok, row = pcall(function()
     return setupUI([[
 Panel
-  height: 50
+  height: 54
   margin-top: 4
   padding: 5
   image-source: /images/ui/panel_flat
@@ -135,17 +134,17 @@ Panel
     anchors.top: title.bottom
     anchors.right: open.left
     margin-right: 5
-    height: 15
+    height: 16
     color: #7ee8a8
-    font: verdana-11px
-    text: iniciar / configurar
+    font: verdana-11px-bold
+    text: Central de scripts
 
   Button
     id: open
     anchors.right: parent.right
     anchors.top: parent.top
     width: 54
-    height: 38
+    height: 40
     text: Abrir
 ]])
   end)

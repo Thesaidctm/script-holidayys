@@ -9,15 +9,107 @@ local JQM_LICENSE_SERVER = "https://jequimultiassessoria.com.br/license_server/a
 local JQM_PENDING_MESSAGE = "AGUARDANDO LIBERACAO MANDE MENSAGEM NO WHATSAPP PARA 33 999987736"
 
 local JQM_SCRIPTS = {
-  { name = "combo", label = "Combo" },
-  { name = "holiday_aoe", label = "Holiday AOE" },
-  { name = "castle_manager", label = "Castle Manager" }
+  { name = "combo", label = "Combo System", desc = "Foco, runas e prioridades" },
+  { name = "holiday_aoe", label = "Holiday AOE", desc = "Magias, area e PvP" },
+  { name = "castle_manager", label = "Castle Manager", desc = "Castle, seguranca e logout" }
 }
+
+local JQM_SWITCH_IDS = {
+  combo = "comboSwitch",
+  holiday_aoe = "holidaySwitch",
+  castle_manager = "castleSwitch"
+}
+
+local jqmWindow = nil
+local jqmLauncher = nil
+local jqmUiLoaded = false
+
+local function jqmWindowControl(id)
+  if not jqmWindow then return nil end
+  if jqmWindow[id] then return jqmWindow[id] end
+  for _, parentId in ipairs({ "headerPanel", "listPanel", "helpPanel", "footer" }) do
+    local panel = jqmWindow[parentId]
+    if panel and panel[id] then return panel[id] end
+  end
+  return nil
+end
 
 storage.JQMScriptManager = type(storage.JQMScriptManager) == "table" and storage.JQMScriptManager or {}
 storage.JQMScriptManager.selected = type(storage.JQMScriptManager.selected) == "table" and storage.JQMScriptManager.selected or {}
 storage.Combo = type(storage.Combo) == "table" and storage.Combo or {}
 storage.Combo.licenseKey = storage.Combo.licenseKey or ""
+
+local function jqmSetText(widget, text)
+  if widget and widget.setText then
+    pcall(function() widget:setText(tostring(text or "")) end)
+  end
+end
+
+local function jqmSetOn(widget, value)
+  if widget and widget.setOn then
+    pcall(function() widget:setOn(value == true) end)
+  elseif widget and widget.setChecked then
+    pcall(function() widget:setChecked(value == true) end)
+  end
+end
+
+local function jqmSelectedNames()
+  local selected = {}
+  for _, item in ipairs(JQM_SCRIPTS) do
+    if storage.JQMScriptManager.selected[item.name] == true then
+      table.insert(selected, item.name)
+    end
+  end
+  return selected
+end
+
+local function jqmSelectedLabels()
+  local labels = {}
+  for _, item in ipairs(JQM_SCRIPTS) do
+    if storage.JQMScriptManager.selected[item.name] == true then
+      table.insert(labels, item.label)
+    end
+  end
+  return labels
+end
+
+local function jqmSelectedCsv()
+  return table.concat(jqmSelectedNames(), ",")
+end
+
+local function jqmSelectedSummary()
+  local labels = jqmSelectedLabels()
+  if #labels == 0 then return "Nenhum script selecionado" end
+  if #labels == 1 then return labels[1] end
+  return tostring(#labels) .. " scripts selecionados"
+end
+
+local function jqmSetManagerStatus(text)
+  jqmSetText(jqmLauncher and jqmLauncher.status, text)
+  jqmSetText(jqmWindowControl("status"), text)
+end
+
+local function jqmRefreshManagerUi()
+  for _, item in ipairs(JQM_SCRIPTS) do
+    local switchId = JQM_SWITCH_IDS[item.name]
+    local widget = switchId and jqmWindowControl(switchId)
+    jqmSetOn(widget, storage.JQMScriptManager.selected[item.name] == true)
+  end
+  jqmSetText(jqmLauncher and jqmLauncher.status, jqmSelectedSummary())
+  jqmSetText(jqmWindowControl("status"), jqmSelectedSummary())
+end
+
+local function jqmToggleSelected(scriptName)
+  storage.JQMScriptManager.selected[scriptName] = not storage.JQMScriptManager.selected[scriptName]
+  jqmRefreshManagerUi()
+end
+
+local function jqmSetAllSelected(value)
+  for _, item in ipairs(JQM_SCRIPTS) do
+    storage.JQMScriptManager.selected[item.name] = value == true
+  end
+  jqmRefreshManagerUi()
+end
 
 local function jqmUrlEncode(value)
   value = tostring(value or "")
@@ -209,14 +301,6 @@ function JQMLoadScript(scriptName)
   end)
 end
 
-local function jqmAllScriptsCsv()
-  local scripts = {}
-  for _, item in ipairs(JQM_SCRIPTS) do
-    table.insert(scripts, item.name)
-  end
-  return table.concat(scripts, ",")
-end
-
 local function jqmScriptsFromResponse(data)
   local scripts = {}
   data = tostring(data or "")
@@ -229,9 +313,16 @@ local function jqmScriptsFromResponse(data)
 end
 
 local function jqmRequestOrLoad()
-  local scripts = jqmAllScriptsCsv()
+  local scripts = jqmSelectedCsv()
+  if scripts == "" then
+    jqmSetManagerStatus("Marque pelo menos um script")
+    jqmWarn("marque pelo menos um script.")
+    return
+  end
+  jqmSetManagerStatus("Conectando ao servidor...")
   jqmHttpGet(jqmBuildUrl("request", { scripts = scripts }), function(data, err)
     if err or not data then
+      jqmSetManagerStatus("Aguardando liberacao")
       jqmWarn(JQM_PENDING_MESSAGE)
       return
     end
@@ -239,9 +330,11 @@ local function jqmRequestOrLoad()
     if data:find('"ok":true', 1, true) or data:find('"ok": true', 1, true) then
       local allowed = jqmScriptsFromResponse(data)
       if #allowed == 0 then
+        jqmSetManagerStatus("Nenhum selecionado liberado")
         jqmWarn("nenhum script liberado para este MAC.")
         return
       end
+      jqmSetManagerStatus("Carregando " .. tostring(#allowed) .. " script(s)")
       jqmWarn("liberado. carregando scripts.")
       for _, scriptName in ipairs(allowed) do
         JQMLoadScript(scriptName)
@@ -249,11 +342,337 @@ local function jqmRequestOrLoad()
       return
     end
 
+    jqmSetManagerStatus("Aguardando liberacao")
     jqmWarn(JQM_PENDING_MESSAGE)
   end)
 end
 
-UI.Separator()
-UI.Label("Derpetson Scripts")
-UI.Label("Acesso por MAC")
-UI.Button("Acessar Scripts", jqmRequestOrLoad)
+local function jqmLoadManagerUi()
+  if jqmUiLoaded then return true end
+  if not g_ui or not g_ui.loadUIFromString then return false end
+
+  local ok = pcall(function()
+    g_ui.loadUIFromString([[
+DerpetsonScriptHubPanel < Panel
+  height: 70
+  margin-top: 4
+  padding: 4
+  image-source: /images/ui/panel_flat
+  image-border: 5
+
+  Label
+    id: title
+    anchors.top: parent.top
+    anchors.left: parent.left
+    anchors.right: open.left
+    margin-right: 4
+    height: 16
+    text-align: center
+    color: #ffd36b
+    font: verdana-11px-bold
+    text: Derpetson Scripts
+
+  Label
+    id: subtitle
+    anchors.top: title.bottom
+    anchors.left: parent.left
+    anchors.right: open.left
+    margin-top: 1
+    margin-right: 4
+    height: 14
+    text-align: center
+    color: #dce4ee
+    font: verdana-11px
+    text: central de acesso
+
+  Label
+    id: status
+    anchors.top: subtitle.bottom
+    anchors.left: parent.left
+    anchors.right: open.left
+    margin-top: 2
+    margin-right: 4
+    height: 14
+    text-align: center
+    color: #7ee8a8
+    font: verdana-11px-bold
+    text: Escolha os scripts
+
+  Button
+    id: open
+    anchors.top: parent.top
+    anchors.right: parent.right
+    width: 52
+    height: 58
+    text-align: center
+    text: Abrir
+
+DerpetsonScriptsWindow < MainWindow
+  text: Derpetson Scripts
+  size: 395 330
+  padding: 10
+  @onEscape: self:hide()
+
+  Panel
+    id: headerPanel
+    anchors.top: parent.top
+    anchors.left: parent.left
+    anchors.right: parent.right
+    height: 62
+    image-source: /images/ui/panel_flat
+    image-border: 5
+    padding: 7
+
+    Label
+      id: title
+      anchors.top: parent.top
+      anchors.left: parent.left
+      anchors.right: parent.right
+      height: 18
+      text-align: center
+      color: #ffd36b
+      font: verdana-11px-bold
+      text: DERPETSON SCRIPTS
+
+    Label
+      id: subtitle
+      anchors.top: title.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      margin-top: 3
+      height: 15
+      text-align: center
+      color: #e8edf4
+      font: verdana-11px
+      text: Selecione os produtos que deseja usar
+
+    Label
+      id: status
+      anchors.top: subtitle.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      margin-top: 3
+      height: 15
+      text-align: center
+      color: #7ee8a8
+      font: verdana-11px-bold
+      text: Nenhum script selecionado
+
+  Panel
+    id: listPanel
+    anchors.top: headerPanel.bottom
+    anchors.left: parent.left
+    anchors.right: parent.right
+    margin-top: 9
+    height: 138
+    image-source: /images/ui/panel_flat
+    image-border: 5
+    padding: 8
+
+    BotSwitch
+      id: comboSwitch
+      anchors.top: parent.top
+      anchors.left: parent.left
+      anchors.right: parent.right
+      height: 24
+      text-align: center
+      text: Combo System
+
+    Label
+      id: comboDesc
+      anchors.top: comboSwitch.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      margin-top: 1
+      height: 15
+      text-align: center
+      color: #9fb2c4
+      font: verdana-11px
+      text: Foco, runas e prioridades
+
+    BotSwitch
+      id: holidaySwitch
+      anchors.top: comboDesc.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      margin-top: 6
+      height: 24
+      text-align: center
+      text: Holiday AOE
+
+    Label
+      id: holidayDesc
+      anchors.top: holidaySwitch.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      margin-top: 1
+      height: 15
+      text-align: center
+      color: #9fb2c4
+      font: verdana-11px
+      text: Magias, area e PvP
+
+    BotSwitch
+      id: castleSwitch
+      anchors.top: holidayDesc.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      margin-top: 6
+      height: 24
+      text-align: center
+      text: Castle Manager
+
+    Label
+      id: castleDesc
+      anchors.top: castleSwitch.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      margin-top: 1
+      height: 15
+      text-align: center
+      color: #9fb2c4
+      font: verdana-11px
+      text: Castle, seguranca e logout
+
+  Panel
+    id: helpPanel
+    anchors.top: listPanel.bottom
+    anchors.left: parent.left
+    anchors.right: parent.right
+    margin-top: 8
+    height: 38
+    background-color: #101620dd
+
+    Label
+      id: help
+      anchors.top: parent.top
+      anchors.left: parent.left
+      anchors.right: parent.right
+      margin-top: 5
+      height: 28
+      text-align: center
+      color: #dce4ee
+      font: verdana-11px
+      text: Sem liberacao, o pedido fica pendente e aparece no painel do servidor.
+
+  Panel
+    id: footer
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.bottom: parent.bottom
+    height: 28
+
+    Button
+      id: allButton
+      anchors.left: parent.left
+      anchors.top: parent.top
+      width: 72
+      height: 24
+      text: Todos
+
+    Button
+      id: clearButton
+      anchors.left: allButton.right
+      anchors.top: parent.top
+      margin-left: 5
+      width: 66
+      height: 24
+      text: Limpar
+
+    Button
+      id: confirmButton
+      anchors.left: clearButton.right
+      anchors.right: closeButton.left
+      anchors.top: parent.top
+      margin-left: 5
+      margin-right: 5
+      height: 24
+      text: Solicitar / Carregar
+
+    Button
+      id: closeButton
+      anchors.right: parent.right
+      anchors.top: parent.top
+      width: 62
+      height: 24
+      text: Fechar
+]])
+  end)
+
+  jqmUiLoaded = ok == true
+  return jqmUiLoaded
+end
+
+local function jqmCreateWindow()
+  if jqmWindow then return jqmWindow end
+  if not jqmLoadManagerUi() or not UI or not UI.createWindow then return nil end
+
+  local root = rootWidget or (g_ui.getRootWidget and g_ui.getRootWidget())
+  local okWindow, window = pcall(function() return UI.createWindow("DerpetsonScriptsWindow", root) end)
+  if not okWindow or not window then
+    okWindow, window = pcall(function() return UI.createWindow("DerpetsonScriptsWindow") end)
+  end
+  if not okWindow or not window then return nil end
+
+  jqmWindow = window
+  jqmWindow:hide()
+
+  if jqmWindowControl("closeButton") then
+    jqmWindowControl("closeButton").onClick = function() jqmWindow:hide() end
+  end
+  if jqmWindowControl("confirmButton") then
+    jqmWindowControl("confirmButton").onClick = jqmRequestOrLoad
+  end
+  if jqmWindowControl("allButton") then
+    jqmWindowControl("allButton").onClick = function() jqmSetAllSelected(true) end
+  end
+  if jqmWindowControl("clearButton") then
+    jqmWindowControl("clearButton").onClick = function() jqmSetAllSelected(false) end
+  end
+  if jqmWindowControl("comboSwitch") then
+    jqmWindowControl("comboSwitch").onClick = function() jqmToggleSelected("combo") end
+  end
+  if jqmWindowControl("holidaySwitch") then
+    jqmWindowControl("holidaySwitch").onClick = function() jqmToggleSelected("holiday_aoe") end
+  end
+  if jqmWindowControl("castleSwitch") then
+    jqmWindowControl("castleSwitch").onClick = function() jqmToggleSelected("castle_manager") end
+  end
+
+  jqmRefreshManagerUi()
+  return jqmWindow
+end
+
+local function jqmOpenManager()
+  local window = jqmCreateWindow()
+  if window then
+    jqmRefreshManagerUi()
+    window:show()
+    window:raise()
+    if window.focus then window:focus() end
+    return
+  end
+  jqmWarn("janela indisponivel neste cliente.")
+end
+
+if jqmLoadManagerUi() and UI and UI.createWidget then
+  local okPanel, panel = pcall(function()
+    if UI and UI.createWidget then
+      return UI.createWidget("DerpetsonScriptHubPanel")
+    end
+    return nil
+  end)
+  if okPanel and panel then
+    jqmLauncher = panel
+    if jqmLauncher.open then jqmLauncher.open.onClick = jqmOpenManager end
+    if jqmLauncher.title then jqmLauncher.title.onClick = jqmOpenManager end
+    if jqmLauncher.subtitle then jqmLauncher.subtitle.onClick = jqmOpenManager end
+    if jqmLauncher.status then jqmLauncher.status.onClick = jqmOpenManager end
+    jqmRefreshManagerUi()
+  elseif UI and UI.Button then
+    UI.Button("Derpetson Scripts", jqmOpenManager)
+  end
+elseif UI and UI.Button then
+  UI.Separator()
+  UI.Button("Derpetson Scripts", jqmOpenManager)
+end

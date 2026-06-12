@@ -1,8 +1,8 @@
 -- Derpetson Scripts launcher standalone.
 -- Entregue este arquivo ao cliente para abrir a central no OTC_BOT dele.
 
-local DERPETSON_LAUNCHER_VERSION = 2026061222
-local DERPETSON_MANAGER_URL = "https://jequimultiassessoria.com.br/license_server/manager.lua?v=2026061222"
+local DERPETSON_LAUNCHER_VERSION = 2026061223
+local DERPETSON_MANAGER_URL = "https://jequimultiassessoria.com.br/license_server/manager.lua?v=2026061223"
 
 local function derpGlobals()
   if type(_G) == "table" then return _G end
@@ -191,12 +191,9 @@ local function derpBindClick(widget)
     derpLoadManager()
     return true
   end
-  widget.onMouseRelease = function(_, _, mouseButton)
-    if mouseButton == nil or MouseLeftButton == nil or mouseButton == MouseLeftButton then
-      derpLoadManager()
-      return true
-    end
-    return false
+  widget.onMouseRelease = function()
+    derpLoadManager()
+    return true
   end
   return true
 end

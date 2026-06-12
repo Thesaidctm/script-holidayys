@@ -15,7 +15,7 @@ local function jqmGlobals()
 end
 
 local jqmGlobal = jqmGlobals()
-local JQM_MANAGER_VERSION = 2026061222
+local JQM_MANAGER_VERSION = 2026061223
 if jqmGlobal.JQMScriptManagerVersion == JQM_MANAGER_VERSION and type(jqmGlobal.JQMOpenManager) == "function" then
   jqmGlobal.JQMOpenManager()
   return
@@ -1428,12 +1428,9 @@ local function jqmBindClick(widget, fn)
     fn()
     return true
   end
-  widget.onMouseRelease = function(_, _, mouseButton)
-    if mouseButton == nil or MouseLeftButton == nil or mouseButton == MouseLeftButton then
-      fn()
-      return true
-    end
-    return false
+  widget.onMouseRelease = function()
+    fn()
+    return true
   end
   return true
 end

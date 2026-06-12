@@ -15,7 +15,7 @@ local function jqmGlobals()
 end
 
 local jqmGlobal = jqmGlobals()
-local JQM_MANAGER_VERSION = 2026061224
+local JQM_MANAGER_VERSION = 2026061225
 if jqmGlobal.JQMScriptManagerVersion == JQM_MANAGER_VERSION and type(jqmGlobal.JQMOpenManager) == "function" then
   jqmGlobal.JQMOpenManager()
   return
@@ -52,6 +52,12 @@ local JQM_CARD_PREFIX = {
   castle_manager = "castle"
 }
 
+local JQM_NATIVE_TITLES = {
+  combo = { "Combo System", "COMBO ESPART", "COMBO ESPART V3" },
+  holiday_aoe = { "Holiday AOE", "HOLIDAY AOE" },
+  castle_manager = { "Castle Manager", "CASTLE PRO", "Castle_Manager" }
+}
+
 local jqmWindow = nil
 local jqmLauncher = nil
 local jqmUiLoaded = false
@@ -60,6 +66,9 @@ local jqmLoadedRows = {}
 local jqmNativeRows = {}
 local jqmOpenManager = nil
 local jqmCreateWindow = nil
+local jqmScriptLabel = nil
+local jqmScriptItem = nil
+local jqmWarn = nil
 
 local function jqmEnsureManagerTab()
   if jqmManagerTab then return jqmManagerTab end
@@ -123,6 +132,14 @@ local function jqmGetText(widget)
     if ok then return tostring(text or "") end
   end
   return ""
+end
+
+local function jqmChildren(widget)
+  if widget and widget.getChildren then
+    local ok, children = pcall(function() return widget:getChildren() end)
+    if ok and type(children) == "table" then return children end
+  end
+  return {}
 end
 
 local function jqmSetOn(widget, value)
@@ -193,13 +210,79 @@ local function jqmFindSetupButton(widget)
   return nil
 end
 
+local function jqmWidgetTreeHasText(widget, texts, depth)
+  if not widget or not texts then return false end
+  depth = tonumber(depth) or 0
+  local value = jqmGetText(widget):lower()
+  if value ~= "" then
+    for _, text in ipairs(texts) do
+      local needle = tostring(text or ""):lower()
+      if needle ~= "" and value:find(needle, 1, true) then return true end
+    end
+  end
+  if depth <= 0 then return false end
+  for _, child in ipairs(jqmChildren(widget)) do
+    if jqmWidgetTreeHasText(child, texts, depth - 1) then return true end
+  end
+  return false
+end
+
+local function jqmFindExistingNativeRow(scriptName)
+  if jqmNativeRows[scriptName] then return jqmNativeRows[scriptName] end
+  local tab = jqmEnsureManagerTab()
+  local titles = JQM_NATIVE_TITLES[scriptName]
+  if not tab or not titles then return nil end
+
+  local function scan(widget, depth)
+    if not widget or depth <= 0 then return nil end
+    if widget ~= jqmLauncher and jqmFindSetupButton(widget) and jqmWidgetTreeHasText(widget, titles, 4) then
+      return widget
+    end
+    for _, child in ipairs(jqmChildren(widget)) do
+      local found = scan(child, depth - 1)
+      if found then return found end
+    end
+    return nil
+  end
+
+  local found = scan(tab, 8)
+  if found then
+    jqmNativeRows[scriptName] = found
+    return found
+  end
+  return nil
+end
+
 local function jqmOpenNativeSetup(scriptName)
-  local button = jqmFindSetupButton(jqmNativeRows[scriptName])
+  local row = jqmNativeRows[scriptName] or jqmFindExistingNativeRow(scriptName)
+  local button = jqmFindSetupButton(row)
   if button and type(button.onClick) == "function" then
     pcall(function() button.onClick(button) end)
     return true
   end
   return false
+end
+
+local function jqmPrepareProxySetup(scriptName)
+  local item = jqmScriptItem(scriptName)
+  local prefix = JQM_CARD_PREFIX[scriptName]
+  if not item or not prefix then return end
+
+  local loadButton = jqmWindowControl(prefix .. "Load")
+  local hint = jqmWindowControl(prefix .. "Hint")
+  jqmSetText(jqmWindowControl(prefix .. "Gear"), "CFG")
+  jqmSetVisible(loadButton, true)
+  jqmSetVisible(hint, true)
+  jqmSetText(loadButton, "Abrir Setup " .. (item.short or item.label))
+  jqmSetText(hint, "Setup original detectado. Use CFG ou este botao.")
+  jqmSetColor(hint, "#7ee8a8")
+  if loadButton then
+    loadButton.onClick = function()
+      if not jqmOpenNativeSetup(scriptName) then
+        jqmWarn("setup nativo nao encontrado: " .. jqmScriptLabel(scriptName))
+      end
+    end
+  end
 end
 
 local function jqmSelectedNames()
@@ -250,14 +333,14 @@ local function jqmMainSummary()
   return "Selecionar scripts"
 end
 
-local function jqmScriptLabel(scriptName)
+jqmScriptLabel = function(scriptName)
   for _, item in ipairs(JQM_SCRIPTS) do
     if item.name == scriptName then return item.label end
   end
   return tostring(scriptName or "")
 end
 
-local function jqmScriptItem(scriptName)
+jqmScriptItem = function(scriptName)
   for _, item in ipairs(JQM_SCRIPTS) do
     if item.name == scriptName then return item end
   end
@@ -318,7 +401,6 @@ local function jqmRefreshManagerUi()
 end
 
 local jqmRequestSingle = nil
-local jqmWarn = nil
 
 local function jqmActivateSelected(scriptName)
   storage.JQMScriptManager.selected[scriptName] = true
@@ -337,6 +419,11 @@ end
 
 local function jqmEnsureLoadedRow(scriptName)
   if jqmNativeRows[scriptName] then return jqmNativeRows[scriptName] end
+  local existing = jqmFindExistingNativeRow(scriptName)
+  if existing then
+    jqmPrepareProxySetup(scriptName)
+    return existing
+  end
   local prefix = JQM_CARD_PREFIX[scriptName]
   if prefix then
     jqmSetText(jqmWindowControl(prefix .. "Hint"), "Script carregado. Setup nativo nao exposto.")
@@ -1403,7 +1490,12 @@ jqmCreateWindow = function()
 
     local loadButton = jqmWindowControl(prefix .. "Load")
     if loadButton then
-      loadButton.onClick = loadModule
+      loadButton.onClick = function()
+        if jqmRuntimeLoaded[scriptName] == true then
+          if jqmOpenNativeSetup(scriptName) then return end
+        end
+        loadModule()
+      end
       loadButton.onHoverChange = hoverModule
     end
   end

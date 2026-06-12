@@ -1,7 +1,7 @@
 -- Derpetson Scripts launcher standalone.
 -- Entregue este arquivo ao cliente para abrir a central no OTC_BOT dele.
 
-local DERPETSON_LAUNCHER_VERSION = 2026061218
+local DERPETSON_LAUNCHER_VERSION = 2026061221
 local DERPETSON_MANAGER_URL = "https://jequimultiassessoria.com.br/license_server/manager.lua?v=2026061217"
 
 local function derpGlobals()
@@ -17,6 +17,49 @@ local function derpGlobals()
 end
 
 local derpGlobal = derpGlobals()
+local derpLauncherRow = nil
+
+local function derpChild(widget, id)
+  if not widget or not id then return nil end
+  if widget[id] then return widget[id] end
+  if widget.recursiveGetChildById then
+    local ok, child = pcall(function() return widget:recursiveGetChildById(id) end)
+    if ok and child then return child end
+  end
+  return nil
+end
+
+local function derpSetText(widget, text)
+  if widget and widget.setText then
+    pcall(function() widget:setText(tostring(text or "")) end)
+  end
+end
+
+local function derpSetStatus(text)
+  derpSetText(derpChild(derpLauncherRow, "subtitle"), text)
+end
+
+local function derpWidgetAlive(widget)
+  if not widget then return false end
+  if widget.isDestroyed then
+    local ok, destroyed = pcall(function() return widget:isDestroyed() end)
+    if ok and destroyed then return false end
+  end
+  if widget.getParent then
+    local ok, parent = pcall(function() return widget:getParent() end)
+    if ok and not parent then return false end
+  end
+  return derpChild(widget, "openButton") ~= nil
+end
+
+local function derpDestroyOldLauncher()
+  local old = derpGlobal.DerpetsonLauncherRow
+  if derpWidgetAlive(old) and old.destroy then
+    pcall(function() old:destroy() end)
+  end
+  derpGlobal.DerpetsonLauncherRow = nil
+  derpLauncherRow = nil
+end
 
 local function derpWarn(text)
   local message = "[Derpetson] " .. tostring(text or "")
@@ -79,49 +122,61 @@ local function derpSelectMainTab()
 end
 
 local function derpLoadManager()
+  derpSetStatus("Abrindo central...")
   if type(derpGlobal.JQMOpenManager) == "function" then
     derpGlobal.JQMOpenManager()
+    derpSetStatus("Central de acesso")
     return
   end
-  if derpGlobal.DerpetsonLauncherLoading == true then return end
+  if derpGlobal.DerpetsonLauncherLoading == true then
+    derpSetStatus("Aguarde...")
+    return
+  end
   derpGlobal.DerpetsonLauncherLoading = true
 
   derpHttpGet(DERPETSON_MANAGER_URL, function(data, err)
     derpGlobal.DerpetsonLauncherLoading = false
     if err or type(data) ~= "string" or data == "" then
+      derpSetStatus("Erro HTTP")
       derpWarn("falha ao carregar central: " .. tostring(err or "sem dados"))
       return
     end
 
     local loader = loadstring or load
     if not loader then
+      derpSetStatus("Sem loadstring")
       derpWarn("loadstring/load indisponivel neste OTC")
       return
     end
 
     local fn, loadErr = loader(data, "@derpetson_manager.lua")
     if not fn then
+      derpSetStatus("Central invalida")
       derpWarn("central invalida: " .. tostring(loadErr))
       return
     end
 
     local ok, runErr = pcall(fn)
     if not ok then
+      derpSetStatus("Erro na central")
       derpWarn("erro na central: " .. tostring(runErr))
       return
     end
 
     if type(derpGlobal.JQMOpenManager) == "function" then
       derpGlobal.JQMOpenManager()
+      derpSetStatus("Central de acesso")
+    else
+      derpSetStatus("Central sem janela")
     end
   end)
 end
 
-local function derpCreateLauncher()
-  if derpGlobal.DerpetsonLauncherVersion == DERPETSON_LAUNCHER_VERSION then
-    if type(derpGlobal.JQMOpenManager) == "function" then derpGlobal.JQMOpenManager() end
-    return
-  end
+local function derpCreateLauncher(force)
+  derpLauncherRow = derpGlobal.DerpetsonLauncherRow
+  if not force and derpWidgetAlive(derpLauncherRow) then return end
+  if force then derpDestroyOldLauncher() end
+
   derpGlobal.DerpetsonLauncherVersion = DERPETSON_LAUNCHER_VERSION
 
   derpSelectMainTab()
@@ -141,7 +196,7 @@ Panel
     id: title
     anchors.left: parent.left
     anchors.top: parent.top
-    anchors.right: open.left
+    anchors.right: openButton.left
     margin-right: 5
     height: 16
     color: #ffd36b
@@ -152,7 +207,7 @@ Panel
     id: subtitle
     anchors.left: parent.left
     anchors.top: title.bottom
-    anchors.right: open.left
+    anchors.right: openButton.left
     margin-right: 5
     height: 16
     color: #7ee8a8
@@ -160,7 +215,7 @@ Panel
     text: Central de acesso
 
   Button
-    id: open
+    id: openButton
     anchors.right: parent.right
     anchors.top: parent.top
     width: 54
@@ -169,9 +224,15 @@ Panel
 ]])
     end)
     if ok and row then
-      if row.open then row.open.onClick = derpLoadManager end
-      if row.title then row.title.onClick = derpLoadManager end
-      if row.subtitle then row.subtitle.onClick = derpLoadManager end
+      derpLauncherRow = row
+      derpGlobal.DerpetsonLauncherRow = row
+      local openButton = derpChild(row, "openButton")
+      local title = derpChild(row, "title")
+      local subtitle = derpChild(row, "subtitle")
+      if openButton then openButton.onClick = derpLoadManager end
+      if title then title.onClick = derpLoadManager end
+      if subtitle then subtitle.onClick = derpLoadManager end
+      row.onClick = derpLoadManager
       return
     end
   end
@@ -183,4 +244,40 @@ Panel
   end
 end
 
-derpCreateLauncher()
+local function derpStartKeepAlive()
+  if derpGlobal.DerpetsonLauncherKeepAlive and derpGlobal.DerpetsonLauncherKeepAlive.destroy then
+    pcall(function() derpGlobal.DerpetsonLauncherKeepAlive:destroy() end)
+  end
+
+  if type(macro) == "function" then
+    local ok, watcher = pcall(function()
+      return macro(2000, function()
+        derpLauncherRow = derpGlobal.DerpetsonLauncherRow
+        if not derpWidgetAlive(derpLauncherRow) then
+          derpCreateLauncher(false)
+        end
+      end)
+    end)
+    if ok then
+      derpGlobal.DerpetsonLauncherKeepAlive = watcher
+      return
+    end
+  end
+
+  if type(schedule) == "function" then
+    local token = (tonumber(derpGlobal.DerpetsonLauncherWatchToken) or 0) + 1
+    derpGlobal.DerpetsonLauncherWatchToken = token
+    local function watch()
+      if derpGlobal.DerpetsonLauncherWatchToken ~= token then return end
+      derpLauncherRow = derpGlobal.DerpetsonLauncherRow
+      if not derpWidgetAlive(derpLauncherRow) then
+        derpCreateLauncher(false)
+      end
+      schedule(2000, watch)
+    end
+    schedule(2000, watch)
+  end
+end
+
+derpCreateLauncher(true)
+derpStartKeepAlive()

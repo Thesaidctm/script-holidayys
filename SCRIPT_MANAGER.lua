@@ -6,6 +6,7 @@ setDefaultTab("Main")
 
 local emblemId = 3
 local JQM_LICENSE_SERVER = "https://jequimultiassessoria.com.br/license_server/api.php"
+local JQM_PENDING_MESSAGE = "AGUARDANDO LIBERACAO MANDE MENSAGEM NO WHATSAPP PARA 33 999987736"
 
 local JQM_SCRIPTS = {
   { name = "combo", label = "Combo" },
@@ -170,7 +171,7 @@ local function jqmRunPayload(scriptName, data)
   end
   if data:sub(1, 1) == "{" then
     if data:find("device_pending", 1, true) then
-      jqmWarn("pedido pendente. Aguarde aprovacao no painel.")
+      jqmWarn(JQM_PENDING_MESSAGE)
     elseif data:find("script_not_allowed", 1, true) then
       jqmWarn("script ainda nao liberado para este MAC.")
     else
@@ -208,58 +209,51 @@ function JQMLoadScript(scriptName)
   end)
 end
 
-local function jqmSelectedCsv()
-  local selected = {}
+local function jqmAllScriptsCsv()
+  local scripts = {}
   for _, item in ipairs(JQM_SCRIPTS) do
-    if storage.JQMScriptManager.selected[item.name] == true then
-      table.insert(selected, item.name)
-    end
+    table.insert(scripts, item.name)
   end
-  return table.concat(selected, ",")
+  return table.concat(scripts, ",")
 end
 
-local function jqmRequestSelected()
-  local scripts = jqmSelectedCsv()
-  if scripts == "" then
-    jqmWarn("selecione pelo menos um script.")
-    return
+local function jqmScriptsFromResponse(data)
+  local scripts = {}
+  data = tostring(data or "")
+  for _, item in ipairs(JQM_SCRIPTS) do
+    if data:find('"' .. item.name .. '"', 1, true) then
+      table.insert(scripts, item.name)
+    end
   end
+  return scripts
+end
+
+local function jqmRequestOrLoad()
+  local scripts = jqmAllScriptsCsv()
   jqmHttpGet(jqmBuildUrl("request", { scripts = scripts }), function(data, err)
     if err or not data then
-      jqmWarn("falha ao enviar pedido: " .. tostring(err or "sem dados"))
+      jqmWarn(JQM_PENDING_MESSAGE)
       return
     end
-    jqmWarn("pedido enviado: " .. scripts)
+
+    if data:find('"ok":true', 1, true) or data:find('"ok": true', 1, true) then
+      local allowed = jqmScriptsFromResponse(data)
+      if #allowed == 0 then
+        jqmWarn("nenhum script liberado para este MAC.")
+        return
+      end
+      jqmWarn("liberado. carregando scripts.")
+      for _, scriptName in ipairs(allowed) do
+        JQMLoadScript(scriptName)
+      end
+      return
+    end
+
+    jqmWarn(JQM_PENDING_MESSAGE)
   end)
 end
 
 UI.Separator()
 UI.Label("Jequi Script Manager")
-UI.Label("Key opcional")
-UI.TextEdit(storage.Combo.licenseKey, function(widget, text)
-  storage.Combo.licenseKey = tostring(text or "")
-end)
-
-for _, item in ipairs(JQM_SCRIPTS) do
-  local button
-  local function updateButton()
-    if button and button.setText then
-      local mark = storage.JQMScriptManager.selected[item.name] == true and "[x] " or "[ ] "
-      button:setText(mark .. item.label)
-    end
-  end
-  button = UI.Button(item.label, function()
-    storage.JQMScriptManager.selected[item.name] = not storage.JQMScriptManager.selected[item.name]
-    updateButton()
-  end)
-  updateButton()
-end
-
-UI.Button("Enviar pedido de acesso", jqmRequestSelected)
-
-for _, item in ipairs(JQM_SCRIPTS) do
-  UI.Button("Carregar " .. item.label, function()
-    JQMLoadScript(item.name)
-  end)
-end
-
+UI.Label("Liberacao por MAC")
+UI.Button("Solicitar / Carregar", jqmRequestOrLoad)

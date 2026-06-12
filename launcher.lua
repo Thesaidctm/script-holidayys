@@ -1,8 +1,8 @@
 -- Derpetson Scripts launcher standalone.
 -- Entregue este arquivo ao cliente para abrir a central no OTC_BOT dele.
 
-local DERPETSON_LAUNCHER_VERSION = 2026061221
-local DERPETSON_MANAGER_URL = "https://jequimultiassessoria.com.br/license_server/manager.lua?v=2026061217"
+local DERPETSON_LAUNCHER_VERSION = 2026061222
+local DERPETSON_MANAGER_URL = "https://jequimultiassessoria.com.br/license_server/manager.lua?v=2026061222"
 
 local function derpGlobals()
   if type(_G) == "table" then return _G end
@@ -18,10 +18,17 @@ end
 
 local derpGlobal = derpGlobals()
 local derpLauncherRow = nil
+local derpLauncherTitle = nil
+local derpLauncherStatus = nil
+local derpLauncherButton = nil
 
 local function derpChild(widget, id)
   if not widget or not id then return nil end
   if widget[id] then return widget[id] end
+  if widget.getChildById then
+    local ok, child = pcall(function() return widget:getChildById(id) end)
+    if ok and child then return child end
+  end
   if widget.recursiveGetChildById then
     local ok, child = pcall(function() return widget:recursiveGetChildById(id) end)
     if ok and child then return child end
@@ -36,6 +43,7 @@ local function derpSetText(widget, text)
 end
 
 local function derpSetStatus(text)
+  derpSetText(derpLauncherStatus, text)
   derpSetText(derpChild(derpLauncherRow, "subtitle"), text)
 end
 
@@ -49,7 +57,7 @@ local function derpWidgetAlive(widget)
     local ok, parent = pcall(function() return widget:getParent() end)
     if ok and not parent then return false end
   end
-  return derpChild(widget, "openButton") ~= nil
+  return derpChild(widget, "open") ~= nil or derpChild(widget, "openButton") ~= nil
 end
 
 local function derpDestroyOldLauncher()
@@ -59,6 +67,9 @@ local function derpDestroyOldLauncher()
   end
   derpGlobal.DerpetsonLauncherRow = nil
   derpLauncherRow = nil
+  derpLauncherTitle = nil
+  derpLauncherStatus = nil
+  derpLauncherButton = nil
 end
 
 local function derpWarn(text)
@@ -172,12 +183,31 @@ local function derpLoadManager()
   end)
 end
 
+derpGlobal.DerpetsonLauncherOpen = derpLoadManager
+
+local function derpBindClick(widget)
+  if not widget then return false end
+  widget.onClick = function()
+    derpLoadManager()
+    return true
+  end
+  widget.onMouseRelease = function(_, _, mouseButton)
+    if mouseButton == nil or MouseLeftButton == nil or mouseButton == MouseLeftButton then
+      derpLoadManager()
+      return true
+    end
+    return false
+  end
+  return true
+end
+
 local function derpCreateLauncher(force)
   derpLauncherRow = derpGlobal.DerpetsonLauncherRow
   if not force and derpWidgetAlive(derpLauncherRow) then return end
   if force then derpDestroyOldLauncher() end
 
   derpGlobal.DerpetsonLauncherVersion = DERPETSON_LAUNCHER_VERSION
+  derpGlobal.DerpetsonLauncherOpen = derpLoadManager
 
   derpSelectMainTab()
 
@@ -196,43 +226,50 @@ Panel
     id: title
     anchors.left: parent.left
     anchors.top: parent.top
-    anchors.right: openButton.left
+    anchors.right: open.left
     margin-right: 5
     height: 16
     color: #ffd36b
     font: verdana-11px-bold
     text: Derpetson Scripts
+    @onClick: DerpetsonLauncherOpen()
 
   Label
     id: subtitle
     anchors.left: parent.left
     anchors.top: title.bottom
-    anchors.right: openButton.left
+    anchors.right: open.left
     margin-right: 5
     height: 16
     color: #7ee8a8
     font: verdana-11px-bold
     text: Central de acesso
+    @onClick: DerpetsonLauncherOpen()
 
   Button
-    id: openButton
+    id: open
     anchors.right: parent.right
     anchors.top: parent.top
     width: 54
     height: 40
     text: Abrir
+    @onClick: DerpetsonLauncherOpen()
 ]])
     end)
     if ok and row then
       derpLauncherRow = row
       derpGlobal.DerpetsonLauncherRow = row
-      local openButton = derpChild(row, "openButton")
-      local title = derpChild(row, "title")
-      local subtitle = derpChild(row, "subtitle")
-      if openButton then openButton.onClick = derpLoadManager end
-      if title then title.onClick = derpLoadManager end
-      if subtitle then subtitle.onClick = derpLoadManager end
-      row.onClick = derpLoadManager
+      derpLauncherButton = derpChild(row, "open") or derpChild(row, "openButton")
+      derpLauncherTitle = derpChild(row, "title")
+      derpLauncherStatus = derpChild(row, "subtitle")
+      local bound = false
+      bound = derpBindClick(derpLauncherButton) or bound
+      bound = derpBindClick(derpLauncherTitle) or bound
+      bound = derpBindClick(derpLauncherStatus) or bound
+      bound = derpBindClick(row) or bound
+      if not bound and UI and UI.Button then
+        UI.Button("Derpetson Scripts", derpLoadManager)
+      end
       return
     end
   end

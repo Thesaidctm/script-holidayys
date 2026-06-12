@@ -15,9 +15,9 @@ local function jqmGlobals()
 end
 
 local jqmGlobal = jqmGlobals()
-local JQM_MANAGER_VERSION = 2026061217
-if jqmGlobal.JQMScriptManagerVersion == JQM_MANAGER_VERSION then
-  if type(jqmGlobal.JQMOpenManager) == "function" then jqmGlobal.JQMOpenManager() end
+local JQM_MANAGER_VERSION = 2026061222
+if jqmGlobal.JQMScriptManagerVersion == JQM_MANAGER_VERSION and type(jqmGlobal.JQMOpenManager) == "function" then
+  jqmGlobal.JQMOpenManager()
   return
 end
 jqmGlobal.JQMScriptManagerVersion = JQM_MANAGER_VERSION
@@ -79,16 +79,28 @@ end
 
 jqmEnsureManagerTab()
 
+local function jqmChild(widget, id)
+  if not widget or not id then return nil end
+  if widget[id] then return widget[id] end
+  if widget.getChildById then
+    local ok, child = pcall(function() return widget:getChildById(id) end)
+    if ok and child then return child end
+  end
+  if widget.recursiveGetChildById then
+    local ok, child = pcall(function() return widget:recursiveGetChildById(id) end)
+    if ok and child then return child end
+  end
+  return nil
+end
+
 local function jqmWindowControl(id)
   if not jqmWindow then return nil end
-  if jqmWindow[id] then return jqmWindow[id] end
-  if jqmWindow.recursiveGetChildById then
-    local ok, widget = pcall(function() return jqmWindow:recursiveGetChildById(id) end)
-    if ok and widget then return widget end
-  end
+  local direct = jqmChild(jqmWindow, id)
+  if direct then return direct end
   for _, parentId in ipairs({ "headerPanel", "listPanel", "helpPanel", "footer" }) do
-    local panel = jqmWindow[parentId]
-    if panel and panel[id] then return panel[id] end
+    local panel = jqmChild(jqmWindow, parentId)
+    local child = jqmChild(panel, id)
+    if child then return child end
   end
   return nil
 end
@@ -167,11 +179,8 @@ end
 local function jqmFindSetupButton(widget)
   if not widget then return nil end
   for _, id in ipairs({ "setup", "Setup", "gear", "open", "cfg", "config" }) do
-    if widget[id] then return widget[id] end
-    if widget.recursiveGetChildById then
-      local ok, child = pcall(function() return widget:recursiveGetChildById(id) end)
-      if ok and child then return child end
-    end
+    local child = jqmChild(widget, id)
+    if child then return child end
   end
   return nil
 end
@@ -1411,6 +1420,24 @@ jqmOpenManager = function()
   jqmWarn("janela indisponivel neste cliente.")
 end
 
+jqmGlobal.JQMOpenManager = jqmOpenManager
+
+local function jqmBindClick(widget, fn)
+  if not widget or type(fn) ~= "function" then return false end
+  widget.onClick = function()
+    fn()
+    return true
+  end
+  widget.onMouseRelease = function(_, _, mouseButton)
+    if mouseButton == nil or MouseLeftButton == nil or mouseButton == MouseLeftButton then
+      fn()
+      return true
+    end
+    return false
+  end
+  return true
+end
+
 local function jqmCreateSetupLauncher()
   if jqmLauncher or type(setupUI) ~= "function" then return false end
   local okPanel, panel = pcall(function()
@@ -1433,6 +1460,7 @@ Panel
     color: #ffd36b
     font: verdana-11px-bold
     text: Derpetson Scripts
+    @onClick: JQMOpenManager()
 
   Label
     id: status
@@ -1444,6 +1472,7 @@ Panel
     color: #7ee8a8
     font: verdana-11px-bold
     text: Selecionar scripts
+    @onClick: JQMOpenManager()
 
   Button
     id: open
@@ -1452,13 +1481,15 @@ Panel
     width: 54
     height: 40
     text: Abrir
+    @onClick: JQMOpenManager()
 ]])
   end)
   if not okPanel or not panel then return false end
   jqmLauncher = panel
-  if jqmLauncher.open then jqmLauncher.open.onClick = jqmOpenManager end
-  if jqmLauncher.title then jqmLauncher.title.onClick = jqmOpenManager end
-  if jqmLauncher.status then jqmLauncher.status.onClick = jqmOpenManager end
+  jqmBindClick(jqmChild(jqmLauncher, "open"), jqmOpenManager)
+  jqmBindClick(jqmChild(jqmLauncher, "title"), jqmOpenManager)
+  jqmBindClick(jqmChild(jqmLauncher, "status"), jqmOpenManager)
+  jqmBindClick(jqmLauncher, jqmOpenManager)
   jqmRefreshManagerUi()
   return true
 end
@@ -1472,10 +1503,11 @@ if not jqmCreateSetupLauncher() and jqmLoadManagerUi() and UI and UI.createWidge
   end)
   if okPanel and panel then
     jqmLauncher = panel
-    if jqmLauncher.open then jqmLauncher.open.onClick = jqmOpenManager end
-    if jqmLauncher.title then jqmLauncher.title.onClick = jqmOpenManager end
-    if jqmLauncher.subtitle then jqmLauncher.subtitle.onClick = jqmOpenManager end
-    if jqmLauncher.status then jqmLauncher.status.onClick = jqmOpenManager end
+    jqmBindClick(jqmChild(jqmLauncher, "open"), jqmOpenManager)
+    jqmBindClick(jqmChild(jqmLauncher, "title"), jqmOpenManager)
+    jqmBindClick(jqmChild(jqmLauncher, "subtitle"), jqmOpenManager)
+    jqmBindClick(jqmChild(jqmLauncher, "status"), jqmOpenManager)
+    jqmBindClick(jqmLauncher, jqmOpenManager)
     jqmRefreshManagerUi()
   elseif UI and UI.Button then
     UI.Button("Derpetson Scripts", jqmOpenManager, jqmEnsureManagerTab())
@@ -1483,5 +1515,3 @@ if not jqmCreateSetupLauncher() and jqmLoadManagerUi() and UI and UI.createWidge
 elseif UI and UI.Button then
   UI.Button("Derpetson Scripts", jqmOpenManager, jqmEnsureManagerTab())
 end
-
-jqmGlobal.JQMOpenManager = jqmOpenManager

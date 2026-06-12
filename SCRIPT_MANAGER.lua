@@ -15,7 +15,7 @@ local function jqmGlobals()
 end
 
 local jqmGlobal = jqmGlobals()
-local JQM_MANAGER_VERSION = 2026061205
+local JQM_MANAGER_VERSION = 2026061207
 if jqmGlobal.JQMScriptManagerVersion == JQM_MANAGER_VERSION then
   if type(jqmGlobal.JQMOpenManager) == "function" then jqmGlobal.JQMOpenManager() end
   return

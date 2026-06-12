@@ -15,7 +15,7 @@ local function jqmGlobals()
 end
 
 local jqmGlobal = jqmGlobals()
-local JQM_MANAGER_VERSION = 2026061207
+local JQM_MANAGER_VERSION = 2026061208
 if jqmGlobal.JQMScriptManagerVersion == JQM_MANAGER_VERSION then
   if type(jqmGlobal.JQMOpenManager) == "function" then jqmGlobal.JQMOpenManager() end
   return
@@ -28,12 +28,16 @@ local JQM_PENDING_MESSAGE = "AGUARDANDO LIBERACAO MANDE MENSAGEM NO WHATSAPP PAR
 local JQM_MANAGER_TAB = "Main"
 local jqmOriginalSetDefaultTab = setDefaultTab
 local jqmRuntimeLoaded = type(jqmGlobal.JQMScriptManagerRuntimeLoaded) == "table" and jqmGlobal.JQMScriptManagerRuntimeLoaded or {}
+if jqmGlobal.JQMScriptManagerRuntimeVersion ~= JQM_MANAGER_VERSION then
+  jqmRuntimeLoaded = {}
+end
 jqmGlobal.JQMScriptManagerRuntimeLoaded = jqmRuntimeLoaded
+jqmGlobal.JQMScriptManagerRuntimeVersion = JQM_MANAGER_VERSION
 
 local JQM_SCRIPTS = {
-  { name = "combo", label = "Combo System", desc = "Foco, runas e prioridades" },
-  { name = "holiday_aoe", label = "Holiday AOE", desc = "Magias, area e PvP" },
-  { name = "castle_manager", label = "Castle Manager", desc = "Castle, seguranca e logout" }
+  { name = "combo", label = "COMBO_ESPART_V3.lua", desc = "Combo, runas e prioridades" },
+  { name = "holiday_aoe", label = "holiday_aoe.lua", desc = "Holiday AOE, area e PvP" },
+  { name = "castle_manager", label = "CASTLE_MANAGER_LOGOUT.lua", desc = "Castle, seguranca e logout" }
 }
 
 local JQM_SWITCH_IDS = {
@@ -46,6 +50,7 @@ local jqmWindow = nil
 local jqmLauncher = nil
 local jqmUiLoaded = false
 local jqmManagerTab = nil
+local jqmLoadedRows = {}
 
 local function jqmEnsureManagerTab()
   if jqmManagerTab then return jqmManagerTab end
@@ -149,6 +154,7 @@ local function jqmRefreshManagerUi()
 end
 
 local jqmRequestSingle = nil
+local jqmWarn = nil
 
 local function jqmActivateSelected(scriptName)
   storage.JQMScriptManager.selected[scriptName] = true
@@ -165,6 +171,112 @@ local function jqmSetAllSelected(value)
   jqmRefreshManagerUi()
 end
 
+local function jqmFindRootWidget()
+  if rootWidget then return rootWidget end
+  if g_ui and g_ui.getRootWidget then
+    local ok, root = pcall(function() return g_ui.getRootWidget() end)
+    if ok and root then return root end
+  end
+  return nil
+end
+
+local function jqmFindWidgetById(id)
+  local root = jqmFindRootWidget()
+  if not root then return nil end
+  if root.recursiveGetChildById then
+    local ok, widget = pcall(function() return root:recursiveGetChildById(id) end)
+    if ok and widget then return widget end
+  end
+  if root.getChildById then
+    local ok, widget = pcall(function() return root:getChildById(id) end)
+    if ok and widget then return widget end
+  end
+  return nil
+end
+
+local function jqmShowWindow(widget)
+  if not widget then return false end
+  pcall(function()
+    if widget.show then widget:show() end
+    if widget.raise then widget:raise() end
+    if widget.focus then widget:focus() end
+  end)
+  return true
+end
+
+local function jqmOpenLoadedScript(scriptName)
+  local candidates = {
+    combo = { "ComboWindow" },
+    holiday_aoe = { "HolidayAoeV2Window", "HolidayAoeCooldownWindow" },
+    castle_manager = { "CastleManagerWindow" }
+  }
+  for _, id in ipairs(candidates[scriptName] or {}) do
+    local widget = jqmFindWidgetById(id)
+    if jqmShowWindow(widget) then return true end
+  end
+  if jqmRuntimeLoaded[scriptName] ~= true then
+    JQMLoadScript(scriptName)
+    return true
+  end
+  jqmWarn("configuracao nao encontrada para " .. jqmScriptLabel(scriptName) .. ". Recarregue o script ou confira o OTUI.")
+  return false
+end
+
+local function jqmEnsureLoadedRow(scriptName)
+  if jqmLoadedRows[scriptName] then return jqmLoadedRows[scriptName] end
+  if type(setupUI) ~= "function" then return nil end
+
+  local item = nil
+  for _, script in ipairs(JQM_SCRIPTS) do
+    if script.name == scriptName then
+      item = script
+      break
+    end
+  end
+  if not item then return nil end
+
+  local tab = jqmEnsureManagerTab()
+  if not tab then return nil end
+
+  local ok, row = pcall(function()
+    return setupUI([[
+Panel
+  height: 20
+  margin-top: 2
+
+  BotSwitch
+    id: title
+    anchors.left: parent.left
+    anchors.right: setup.left
+    anchors.top: parent.top
+    margin-right: 2
+    height: 18
+    text-align: center
+    color: #ffffff
+
+  Button
+    id: setup
+    anchors.right: parent.right
+    anchors.top: parent.top
+    width: 42
+    height: 18
+    text: Setup
+]], tab)
+  end)
+  if not ok or not row then return nil end
+
+  jqmLoadedRows[scriptName] = row
+  if row.title then
+    jqmSetText(row.title, item.label)
+    jqmSetOn(row.title, true)
+    row.title.onClick = function() jqmOpenLoadedScript(scriptName) end
+  end
+  if row.setup then
+    row.setup.onClick = function() jqmOpenLoadedScript(scriptName) end
+  end
+  return row
+end
+
 local function jqmUrlEncode(value)
   value = tostring(value or "")
   value = value:gsub("\n", "\r\n")
@@ -174,7 +286,7 @@ local function jqmUrlEncode(value)
   return value
 end
 
-local function jqmWarn(text)
+jqmWarn = function(text)
   local message = "[JQM] " .. tostring(text or "")
   if modules and modules.game_textmessage and modules.game_textmessage.displayGameMessage then
     pcall(function() modules.game_textmessage.displayGameMessage(message) end)
@@ -310,10 +422,27 @@ local function jqmBuildUrl(action, extra)
   return JQM_LICENSE_SERVER .. "?" .. table.concat(parts, "&")
 end
 
+local function jqmPayloadEnv()
+  local env = jqmGlobals()
+  if type(env) ~= "table" then env = {} end
+  env._G = env
+  env.parent = jqmEnsureManagerTab()
+  return env
+end
+
+local function jqmApplyPayloadEnv(fn)
+  if type(fn) ~= "function" then return fn end
+  if type(setfenv) == "function" then
+    pcall(function() setfenv(fn, jqmPayloadEnv()) end)
+  end
+  return fn
+end
+
 local function jqmRunInManagerTab(fn)
   local originalSetDefaultTab = setDefaultTab
   local originalGetTab = getTab
-  local originalParent = parent
+  local originalLoadstring = loadstring
+  local originalLoad = load
   local managerTab = jqmEnsureManagerTab()
 
   local function selectManagerTab()
@@ -342,13 +471,30 @@ local function jqmRunInManagerTab(fn)
     return selectManagerTab()
   end
 
+  local function wrapLoader(loader)
+    return function(...)
+      local loaded, loadErr = loader(...)
+      if type(loaded) == "function" then
+        loaded = jqmApplyPayloadEnv(loaded)
+      end
+      return loaded, loadErr
+    end
+  end
+
   if type(originalSetDefaultTab) == "function" then
     setDefaultTab = forcedSetDefaultTab
   end
   if type(originalGetTab) == "function" then
     getTab = forcedGetTab
   end
+  if type(originalLoadstring) == "function" then
+    loadstring = wrapLoader(originalLoadstring)
+  end
+  if type(originalLoad) == "function" then
+    load = wrapLoader(originalLoad)
+  end
   selectManagerTab()
+  jqmApplyPayloadEnv(fn)
 
   local ok, err = pcall(fn)
 
@@ -358,7 +504,13 @@ local function jqmRunInManagerTab(fn)
   if type(originalGetTab) == "function" then
     getTab = originalGetTab
   end
-  parent = originalParent
+  if type(originalLoadstring) == "function" then
+    loadstring = originalLoadstring
+  end
+  if type(originalLoad) == "function" then
+    load = originalLoad
+  end
+  selectManagerTab()
 
   return ok, err
 end
@@ -385,6 +537,7 @@ local function jqmRunPayload(scriptName, data)
     return false
   end
   if jqmRuntimeLoaded[scriptName] == true then
+    jqmEnsureLoadedRow(scriptName)
     jqmSetManagerStatus("Ja carregado")
     jqmWarn("ja carregado: " .. jqmScriptLabel(scriptName))
     return true
@@ -401,7 +554,8 @@ local function jqmRunPayload(scriptName, data)
   end
   jqmRuntimeLoaded[scriptName] = true
   storage.JQMScriptManager.loaded[scriptName] = true
-  jqmSetManagerStatus("Carregado no painel")
+  jqmEnsureLoadedRow(scriptName)
+  jqmSetManagerStatus("Carregado na Main")
   jqmWarn("carregado: " .. jqmScriptLabel(scriptName))
   return true
 end
@@ -628,7 +782,7 @@ DerpetsonScriptsWindow < MainWindow
       anchors.right: parent.right
       height: 24
       text-align: center
-      text: Combo System
+      text: COMBO_ESPART_V3.lua
 
     Label
       id: comboDesc
@@ -640,7 +794,7 @@ DerpetsonScriptsWindow < MainWindow
       text-align: center
       color: #9fb2c4
       font: verdana-11px
-      text: Foco, runas e prioridades
+      text: Combo, runas e prioridades
 
     BotSwitch
       id: holidaySwitch
@@ -650,7 +804,7 @@ DerpetsonScriptsWindow < MainWindow
       margin-top: 6
       height: 24
       text-align: center
-      text: Holiday AOE
+      text: holiday_aoe.lua
 
     Label
       id: holidayDesc
@@ -662,7 +816,7 @@ DerpetsonScriptsWindow < MainWindow
       text-align: center
       color: #9fb2c4
       font: verdana-11px
-      text: Magias, area e PvP
+      text: Holiday AOE, area e PvP
 
     BotSwitch
       id: castleSwitch
@@ -672,7 +826,7 @@ DerpetsonScriptsWindow < MainWindow
       margin-top: 6
       height: 24
       text-align: center
-      text: Castle Manager
+      text: CASTLE_MANAGER_LOGOUT.lua
 
     Label
       id: castleDesc

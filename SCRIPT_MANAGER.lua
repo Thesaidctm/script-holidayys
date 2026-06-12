@@ -15,7 +15,7 @@ local function jqmGlobals()
 end
 
 local jqmGlobal = jqmGlobals()
-local JQM_MANAGER_VERSION = 2026061223
+local JQM_MANAGER_VERSION = 2026061224
 if jqmGlobal.JQMScriptManagerVersion == JQM_MANAGER_VERSION and type(jqmGlobal.JQMOpenManager) == "function" then
   jqmGlobal.JQMOpenManager()
   return
@@ -117,6 +117,14 @@ local function jqmSetText(widget, text)
   end
 end
 
+local function jqmGetText(widget)
+  if widget and widget.getText then
+    local ok, text = pcall(function() return widget:getText() end)
+    if ok then return tostring(text or "") end
+  end
+  return ""
+end
+
 local function jqmSetOn(widget, value)
   if widget and widget.setOn then
     pcall(function() widget:setOn(value == true) end)
@@ -172,13 +180,13 @@ local function jqmMarkNativeReady(scriptName, row)
   if prefix then
     jqmSetVisible(jqmWindowControl(prefix .. "Hint"), false)
     jqmSetVisible(jqmWindowControl(prefix .. "Load"), false)
-    jqmSetText(jqmWindowControl(prefix .. "Gear"), "SET")
+    jqmSetText(jqmWindowControl(prefix .. "Gear"), "CFG")
   end
 end
 
 local function jqmFindSetupButton(widget)
   if not widget then return nil end
-  for _, id in ipairs({ "setup", "Setup", "gear", "open", "cfg", "config" }) do
+  for _, id in ipairs({ "setup", "Setup", "push", "edit", "gear", "open", "cfg", "config" }) do
     local child = jqmChild(widget, id)
     if child then return child end
   end
@@ -267,7 +275,7 @@ local function jqmModuleStatus(scriptName)
 end
 
 local function jqmSetManagerStatus(text)
-  jqmSetText(jqmLauncher and jqmLauncher.status, text)
+  jqmSetText(jqmChild(jqmLauncher, "status") or jqmChild(jqmLauncher, "subtitle"), text)
   jqmSetText(jqmWindowControl("status"), text)
 end
 
@@ -305,7 +313,7 @@ local function jqmRefreshManagerUi()
   for _, item in ipairs(JQM_SCRIPTS) do
     jqmUpdateModuleCard(item, false)
   end
-  jqmSetText(jqmLauncher and jqmLauncher.status, jqmMainSummary())
+  jqmSetText(jqmChild(jqmLauncher, "status") or jqmChild(jqmLauncher, "subtitle"), jqmMainSummary())
   jqmSetText(jqmWindowControl("status"), jqmSelectedSummary())
 end
 
@@ -333,7 +341,7 @@ local function jqmEnsureLoadedRow(scriptName)
   if prefix then
     jqmSetText(jqmWindowControl(prefix .. "Hint"), "Script carregado. Setup nativo nao exposto.")
     jqmSetColor(jqmWindowControl(prefix .. "Hint"), "#ffd36b")
-    jqmSetText(jqmWindowControl(prefix .. "Gear"), "SET")
+    jqmSetText(jqmWindowControl(prefix .. "Gear"), "CFG")
   end
   return jqmNativeHost(scriptName)
 end
@@ -1435,6 +1443,44 @@ local function jqmBindClick(widget, fn)
   return true
 end
 
+local function jqmCleanupDuplicateLaunchers(keep)
+  local tab = jqmEnsureManagerTab()
+  if not tab or not tab.getChildren then return end
+  local ok, children = pcall(function() return tab:getChildren() end)
+  if not ok or type(children) ~= "table" then return end
+
+  for _, child in ipairs(children) do
+    if child and child ~= keep and child.destroy then
+      local title = jqmChild(child, "title")
+      local open = jqmChild(child, "open") or jqmChild(child, "openButton")
+      if open and jqmGetText(title) == "Derpetson Scripts" then
+        pcall(function() child:destroy() end)
+      end
+    end
+  end
+end
+
+local function jqmUseExternalLauncher()
+  local external = jqmGlobal.DerpetsonLauncherRow
+  if not external then return false end
+
+  local old = jqmGlobal.JQMScriptManagerLauncher
+  if old and old ~= external and old.destroy then
+    pcall(function() old:destroy() end)
+  end
+
+  jqmLauncher = external
+  jqmGlobal.JQMScriptManagerLauncher = external
+  jqmCleanupDuplicateLaunchers(external)
+  jqmBindClick(jqmChild(jqmLauncher, "open") or jqmChild(jqmLauncher, "openButton"), jqmOpenManager)
+  jqmBindClick(jqmChild(jqmLauncher, "title"), jqmOpenManager)
+  jqmBindClick(jqmChild(jqmLauncher, "subtitle"), jqmOpenManager)
+  jqmBindClick(jqmChild(jqmLauncher, "status"), jqmOpenManager)
+  jqmBindClick(jqmLauncher, jqmOpenManager)
+  jqmRefreshManagerUi()
+  return true
+end
+
 local function jqmCreateSetupLauncher()
   if jqmLauncher or type(setupUI) ~= "function" then return false end
   local okPanel, panel = pcall(function()
@@ -1483,6 +1529,7 @@ Panel
   end)
   if not okPanel or not panel then return false end
   jqmLauncher = panel
+  jqmGlobal.JQMScriptManagerLauncher = panel
   jqmBindClick(jqmChild(jqmLauncher, "open"), jqmOpenManager)
   jqmBindClick(jqmChild(jqmLauncher, "title"), jqmOpenManager)
   jqmBindClick(jqmChild(jqmLauncher, "status"), jqmOpenManager)
@@ -1491,7 +1538,7 @@ Panel
   return true
 end
 
-if not jqmCreateSetupLauncher() and jqmLoadManagerUi() and UI and UI.createWidget then
+if not jqmUseExternalLauncher() and not jqmCreateSetupLauncher() and jqmLoadManagerUi() and UI and UI.createWidget then
   local okPanel, panel = pcall(function()
     if UI and UI.createWidget then
       return UI.createWidget("DerpetsonScriptHubPanel", jqmEnsureManagerTab())
@@ -1500,6 +1547,7 @@ if not jqmCreateSetupLauncher() and jqmLoadManagerUi() and UI and UI.createWidge
   end)
   if okPanel and panel then
     jqmLauncher = panel
+    jqmGlobal.JQMScriptManagerLauncher = panel
     jqmBindClick(jqmChild(jqmLauncher, "open"), jqmOpenManager)
     jqmBindClick(jqmChild(jqmLauncher, "title"), jqmOpenManager)
     jqmBindClick(jqmChild(jqmLauncher, "subtitle"), jqmOpenManager)

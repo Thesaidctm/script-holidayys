@@ -15,7 +15,7 @@ local function jqmGlobals()
 end
 
 local jqmGlobal = jqmGlobals()
-local JQM_MANAGER_VERSION = 2026061226
+local JQM_MANAGER_VERSION = 2026061228
 if jqmGlobal.JQMScriptManagerVersion == JQM_MANAGER_VERSION and type(jqmGlobal.JQMOpenManager) == "function" then
   jqmGlobal.JQMOpenManager()
   return
@@ -53,10 +53,16 @@ local JQM_CARD_PREFIX = {
 }
 
 local JQM_NATIVE_TITLES = {
-  combo = { "Combo System", "COMBO ESPART", "COMBO ESPART V3" },
+  combo = { "Combo System", "SMART PVP", "COMBO ESPART", "COMBO ESPART V3" },
   holiday_aoe = { "Holiday AOE", "HOLIDAY AOE" },
   castle_manager = { "Castle Manager", "CASTLE PRO", "Castle_Manager" }
 }
+
+local JQM_NATIVE_WIDGET_CLASSES = {
+  castle_manager = { "CastleManagerBotPanel" }
+}
+
+local JQM_SETUP_IDS = { "setup", "Setup", "push", "edit", "cfg", "config" }
 
 local jqmWindow = nil
 local jqmLauncher = nil
@@ -64,6 +70,7 @@ local jqmUiLoaded = false
 local jqmManagerTab = nil
 local jqmLoadedRows = {}
 local jqmNativeRows = {}
+local jqmNativeSetupButtons = {}
 local jqmOpenManager = nil
 local jqmCreateWindow = nil
 local jqmScriptLabel = nil
@@ -71,6 +78,7 @@ local jqmScriptItem = nil
 local jqmWarn = nil
 local jqmPrepareProxySetup = nil
 local jqmEnsureLoadedRow = nil
+local jqmCaptureNativeSetup = nil
 
 local function jqmEnsureManagerTab()
   if jqmManagerTab then return jqmManagerTab end
@@ -193,23 +201,53 @@ local function jqmNativeHost(scriptName)
   return jqmEnsureManagerTab()
 end
 
-local function jqmMarkNativeReady(scriptName, row)
-  jqmNativeRows[scriptName] = row or jqmNativeRows[scriptName]
+local function jqmMarkNativeReady(scriptName, row, className)
+  local captured = false
+  if row and type(jqmCaptureNativeSetup) == "function" then
+    captured = jqmCaptureNativeSetup(scriptName, row, className)
+  elseif row and not jqmNativeRows[scriptName] then
+    jqmNativeRows[scriptName] = row
+    captured = true
+  end
+
   local prefix = JQM_CARD_PREFIX[scriptName]
   if prefix then
-    jqmSetText(jqmWindowControl(prefix .. "Gear"), "CFG")
-    if type(jqmPrepareProxySetup) == "function" then
-      jqmPrepareProxySetup(scriptName)
-    else
-      jqmSetVisible(jqmWindowControl(prefix .. "Hint"), true)
-      jqmSetVisible(jqmWindowControl(prefix .. "Load"), true)
+    if captured and jqmNativeSetupButtons[scriptName] then
+      jqmSetText(jqmWindowControl(prefix .. "Gear"), "CFG")
+      if type(jqmPrepareProxySetup) == "function" then
+        jqmPrepareProxySetup(scriptName)
+      else
+        jqmSetVisible(jqmWindowControl(prefix .. "Hint"), true)
+        jqmSetVisible(jqmWindowControl(prefix .. "Load"), true)
+      end
     end
   end
 end
 
+local function jqmDirectChild(widget, id)
+  if not widget or not id then return nil end
+  if widget[id] then return widget[id] end
+  if widget.getChildById then
+    local ok, child = pcall(function() return widget:getChildById(id) end)
+    if ok and child then return child end
+  end
+  return nil
+end
+
+local function jqmDirectSetupButton(widget)
+  if not widget then return nil end
+  for _, id in ipairs(JQM_SETUP_IDS) do
+    local child = jqmDirectChild(widget, id)
+    if child then return child end
+  end
+  return nil
+end
+
 local function jqmFindSetupButton(widget)
   if not widget then return nil end
-  for _, id in ipairs({ "setup", "Setup", "push", "edit", "gear", "open", "cfg", "config" }) do
+  local direct = jqmDirectSetupButton(widget)
+  if direct then return direct end
+  for _, id in ipairs(JQM_SETUP_IDS) do
     local child = jqmChild(widget, id)
     if child then return child end
   end
@@ -233,15 +271,42 @@ local function jqmWidgetTreeHasText(widget, texts, depth)
   return false
 end
 
+local function jqmNativeClassMatches(scriptName, className)
+  local classes = JQM_NATIVE_WIDGET_CLASSES[scriptName]
+  if not classes then return false end
+  className = tostring(className or "")
+  for _, candidate in ipairs(classes) do
+    if className == candidate then return true end
+  end
+  return false
+end
+
+local function jqmNativeWidgetMatches(scriptName, widget, className)
+  if jqmNativeClassMatches(scriptName, className) then return true end
+  local titles = JQM_NATIVE_TITLES[scriptName]
+  return titles and jqmWidgetTreeHasText(widget, titles, 3) == true
+end
+
+jqmCaptureNativeSetup = function(scriptName, row, className)
+  if not scriptName or not row then return false end
+  local button = jqmFindSetupButton(row)
+  if not button then return false end
+  if not jqmNativeWidgetMatches(scriptName, row, className) then return false end
+
+  jqmNativeRows[scriptName] = row
+  jqmNativeSetupButtons[scriptName] = button
+  return true
+end
+
 local function jqmFindExistingNativeRow(scriptName)
-  if jqmNativeRows[scriptName] then return jqmNativeRows[scriptName] end
+  if jqmNativeRows[scriptName] and jqmNativeSetupButtons[scriptName] then return jqmNativeRows[scriptName] end
   local tab = jqmEnsureManagerTab()
   local titles = JQM_NATIVE_TITLES[scriptName]
   if not tab or not titles then return nil end
 
   local function scan(widget, depth)
     if not widget or depth <= 0 then return nil end
-    if widget ~= jqmLauncher and jqmFindSetupButton(widget) and jqmWidgetTreeHasText(widget, titles, 4) then
+    if widget ~= jqmLauncher and jqmDirectSetupButton(widget) and jqmWidgetTreeHasText(widget, titles, 2) then
       return widget
     end
     for _, child in ipairs(jqmChildren(widget)) do
@@ -253,15 +318,18 @@ local function jqmFindExistingNativeRow(scriptName)
 
   local found = scan(tab, 8)
   if found then
-    jqmNativeRows[scriptName] = found
-    return found
+    if jqmCaptureNativeSetup(scriptName, found) then
+      return jqmNativeRows[scriptName]
+    end
   end
   return nil
 end
 
 local function jqmOpenNativeSetup(scriptName)
-  local row = jqmNativeRows[scriptName] or jqmFindExistingNativeRow(scriptName)
-  local button = jqmFindSetupButton(row)
+  if not jqmNativeSetupButtons[scriptName] then
+    jqmFindExistingNativeRow(scriptName)
+  end
+  local button = jqmNativeSetupButtons[scriptName]
   if button and type(button.onClick) == "function" then
     pcall(function() button.onClick(button) end)
     return true
@@ -279,13 +347,24 @@ jqmPrepareProxySetup = function(scriptName)
   jqmSetText(jqmWindowControl(prefix .. "Gear"), "CFG")
   jqmSetVisible(loadButton, true)
   jqmSetVisible(hint, true)
-  jqmSetText(loadButton, "Abrir Setup " .. (item.short or item.label))
-  jqmSetText(hint, "Setup original detectado. Use CFG ou este botao.")
-  jqmSetColor(hint, "#7ee8a8")
+  if not jqmNativeSetupButtons[scriptName] then
+    jqmFindExistingNativeRow(scriptName)
+  end
+
+  if jqmNativeSetupButtons[scriptName] then
+    jqmSetText(loadButton, "Abrir Setup " .. (item.short or item.label))
+    jqmSetText(hint, "Setup original capturado dentro da central.")
+    jqmSetColor(hint, "#7ee8a8")
+  else
+    jqmSetText(loadButton, "Setup nao capturado")
+    jqmSetText(hint, "Reinicie o bot e carregue este modulo pela central.")
+    jqmSetColor(hint, "#ffd36b")
+  end
+
   if loadButton then
     loadButton.onClick = function()
       if not jqmOpenNativeSetup(scriptName) then
-        jqmWarn("setup nativo nao encontrado: " .. jqmScriptLabel(scriptName))
+        jqmWarn("setup nativo nao capturado: " .. jqmScriptLabel(scriptName))
       end
     end
   end
@@ -610,6 +689,8 @@ local function jqmRunInManagerTab(scriptName, fn)
   local originalSetupUI = setupUI
   local originalLoadstring = loadstring
   local originalLoad = load
+  local originalUICreateWidget = type(UI) == "table" and UI.createWidget or nil
+  local originalGUiCreateWidget = type(g_ui) == "table" and g_ui.createWidget or nil
   local managerTab = jqmEnsureManagerTab()
   local nativeHost = jqmNativeHost(scriptName)
 
@@ -642,6 +723,20 @@ local function jqmRunInManagerTab(scriptName, fn)
     return row
   end
 
+  local function forcedCreateWidget(originalCreateWidget)
+    return function(className, targetParent, ...)
+      local finalParent = targetParent
+      if finalParent == nil and jqmNativeClassMatches(scriptName, className) then
+        finalParent = nativeHost or parent
+      end
+      local widget = originalCreateWidget(className, finalParent, ...)
+      if widget then
+        jqmMarkNativeReady(scriptName, widget, className)
+      end
+      return widget
+    end
+  end
+
   local function wrapLoader(loader)
     return function(...)
       local loaded, loadErr = loader(...)
@@ -660,6 +755,12 @@ local function jqmRunInManagerTab(scriptName, fn)
   end
   if type(originalSetupUI) == "function" then
     setupUI = forcedSetupUI
+  end
+  if type(originalUICreateWidget) == "function" and type(UI) == "table" then
+    UI.createWidget = forcedCreateWidget(originalUICreateWidget)
+  end
+  if type(originalGUiCreateWidget) == "function" and type(g_ui) == "table" then
+    g_ui.createWidget = forcedCreateWidget(originalGUiCreateWidget)
   end
   if type(originalLoadstring) == "function" then
     loadstring = wrapLoader(originalLoadstring)
@@ -680,6 +781,12 @@ local function jqmRunInManagerTab(scriptName, fn)
   end
   if type(originalSetupUI) == "function" then
     setupUI = originalSetupUI
+  end
+  if type(originalUICreateWidget) == "function" and type(UI) == "table" then
+    UI.createWidget = originalUICreateWidget
+  end
+  if type(originalGUiCreateWidget) == "function" and type(g_ui) == "table" then
+    g_ui.createWidget = originalGUiCreateWidget
   end
   if type(originalLoadstring) == "function" then
     loadstring = originalLoadstring
@@ -1475,7 +1582,9 @@ jqmCreateWindow = function()
       jqmActivateSelected(scriptName)
     end
     local function setupOrLoadModule()
-      if jqmRuntimeLoaded[scriptName] == true and jqmOpenNativeSetup(scriptName) then
+      if jqmRuntimeLoaded[scriptName] == true then
+        if jqmOpenNativeSetup(scriptName) then return end
+        jqmWarn("setup nativo nao capturado: " .. jqmScriptLabel(scriptName))
         return
       end
       loadModule()
@@ -1503,6 +1612,8 @@ jqmCreateWindow = function()
       loadButton.onClick = function()
         if jqmRuntimeLoaded[scriptName] == true then
           if jqmOpenNativeSetup(scriptName) then return end
+          jqmWarn("setup nativo nao capturado: " .. jqmScriptLabel(scriptName))
+          return
         end
         loadModule()
       end

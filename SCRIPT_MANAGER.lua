@@ -15,7 +15,7 @@ local function jqmGlobals()
 end
 
 local jqmGlobal = jqmGlobals()
-local JQM_MANAGER_VERSION = 2026061307
+local JQM_MANAGER_VERSION = 2026061309
 if jqmGlobal.JQMScriptManagerVersion == JQM_MANAGER_VERSION and type(jqmGlobal.JQMOpenManager) == "function" then
   if type(jqmGlobal.JQMRefreshAccess) == "function" then
     pcall(function() jqmGlobal.JQMRefreshAccess(true) end)

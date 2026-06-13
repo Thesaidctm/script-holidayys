@@ -15,7 +15,7 @@ local function jqmGlobals()
 end
 
 local jqmGlobal = jqmGlobals()
-local JQM_MANAGER_VERSION = 2026061233
+local JQM_MANAGER_VERSION = 2026061234
 if jqmGlobal.JQMScriptManagerVersion == JQM_MANAGER_VERSION and type(jqmGlobal.JQMOpenManager) == "function" then
   jqmGlobal.JQMOpenManager()
   return
@@ -543,16 +543,16 @@ local function jqmUpdateModuleCard(item, hover)
     end
   elseif storage.JQMScriptManager.selected[item.name] == true then
     jqmSetText(gear, "Carregar")
-    jqmSetVisible(loadButton, true)
-    jqmSetText(loadButton, "Carregar agora")
+    jqmSetVisible(loadButton, false)
     jqmSetVisible(hint, true)
-    jqmSetText(hint, "Aguardando carregamento.")
+    jqmSetText(hint, "Marcado. Clique em Carregar para iniciar.")
+    jqmSetColor(hint, "#ffd36b")
   else
     jqmSetText(gear, "Carregar")
-    jqmSetVisible(loadButton, true)
-    jqmSetText(loadButton, "Carregar modulo")
+    jqmSetVisible(loadButton, false)
     jqmSetVisible(hint, true)
-    jqmSetText(hint, "Setup aparece apos carregar")
+    jqmSetText(hint, "Clique em Carregar para ativar.")
+    jqmSetColor(hint, "#9fb2c4")
   end
   jqmSetColor(badge, statusColor)
   jqmSetColor(title, titleColor)
@@ -561,6 +561,8 @@ local function jqmUpdateModuleCard(item, hover)
   jqmSetColor(gear, jqmRuntimeLoaded[item.name] == true and "#ffffff" or (hover and "#ffd36b" or "#dce4ee"))
   if jqmRuntimeLoaded[item.name] == true then
     jqmSetBackground(gear, setupReady and "#1f6f3add" or "#6f531fdd")
+  elseif storage.JQMScriptManager.selected[item.name] == true then
+    jqmSetBackground(gear, "#2b5f83dd")
   else
     jqmSetBackground(gear, hover and "#344152dd" or "#252a32dd")
   end
@@ -1202,7 +1204,7 @@ DerpetsonScriptsWindow < MainWindow
       anchors.left: parent.left
       anchors.right: parent.right
       margin-top: 3
-      height: 82
+      height: 72
       padding: 5
       image-source: /images/ui/panel_flat
       image-border: 5
@@ -1213,7 +1215,7 @@ DerpetsonScriptsWindow < MainWindow
         anchors.left: parent.left
         anchors.top: parent.top
         width: 28
-        height: 70
+        height: 60
         text-align: center
         color: #ffd36b
         font: verdana-11px-bold
@@ -1269,32 +1271,23 @@ DerpetsonScriptsWindow < MainWindow
         anchors.right: parent.right
         anchors.top: comboDesc.bottom
         margin-top: 6
-        height: 38
+        height: 24
         padding: 1
         image-source: /images/ui/panel_flat
         image-border: 5
         background-color: #0d121add
 
-        Button
-          id: comboLoad
-          anchors.left: parent.left
-          anchors.right: parent.right
-          anchors.top: parent.top
-          margin: 3
-          height: 20
-          text: Carregar modulo
-
         Label
           id: comboHint
           anchors.left: parent.left
           anchors.right: parent.right
-          anchors.top: comboLoad.bottom
-          margin-top: 1
-          height: 12
+          anchors.top: parent.top
+          margin: 3
+          height: 16
           text-align: center
           color: #9fb2c4
           font: verdana-11px
-          text: Setup aparece apos carregar
+          text: Clique em Carregar para ativar.
 
     Label
       id: castleCategory
@@ -1313,7 +1306,7 @@ DerpetsonScriptsWindow < MainWindow
       anchors.left: parent.left
       anchors.right: parent.right
       margin-top: 3
-      height: 82
+      height: 72
       padding: 5
       image-source: /images/ui/panel_flat
       image-border: 5
@@ -1324,7 +1317,7 @@ DerpetsonScriptsWindow < MainWindow
         anchors.left: parent.left
         anchors.top: parent.top
         width: 28
-        height: 70
+        height: 60
         text-align: center
         color: #ffd36b
         font: verdana-11px-bold
@@ -1380,32 +1373,23 @@ DerpetsonScriptsWindow < MainWindow
         anchors.right: parent.right
         anchors.top: castleDesc.bottom
         margin-top: 6
-        height: 38
+        height: 24
         padding: 1
         image-source: /images/ui/panel_flat
         image-border: 5
         background-color: #0d121add
 
-        Button
-          id: castleLoad
-          anchors.left: parent.left
-          anchors.right: parent.right
-          anchors.top: parent.top
-          margin: 3
-          height: 20
-          text: Carregar modulo
-
         Label
           id: castleHint
           anchors.left: parent.left
           anchors.right: parent.right
-          anchors.top: castleLoad.bottom
-          margin-top: 1
-          height: 12
+          anchors.top: parent.top
+          margin: 3
+          height: 16
           text-align: center
           color: #9fb2c4
           font: verdana-11px
-          text: Setup aparece apos carregar
+          text: Clique em Carregar para ativar.
 
     Label
       id: defenseCategory
@@ -1424,7 +1408,7 @@ DerpetsonScriptsWindow < MainWindow
       anchors.left: parent.left
       anchors.right: parent.right
       margin-top: 3
-      height: 82
+      height: 72
       padding: 5
       image-source: /images/ui/panel_flat
       image-border: 5
@@ -1435,7 +1419,7 @@ DerpetsonScriptsWindow < MainWindow
         anchors.left: parent.left
         anchors.top: parent.top
         width: 28
-        height: 70
+        height: 60
         text-align: center
         color: #ffd36b
         font: verdana-11px-bold
@@ -1491,28 +1475,19 @@ DerpetsonScriptsWindow < MainWindow
         anchors.right: parent.right
         anchors.top: holidayDesc.bottom
         margin-top: 6
-        height: 38
+        height: 24
         padding: 1
         image-source: /images/ui/panel_flat
         image-border: 5
         background-color: #0d121add
 
-        Button
-          id: holidayLoad
-          anchors.left: parent.left
-          anchors.right: parent.right
-          anchors.top: parent.top
-          margin: 3
-          height: 20
-          text: Carregar modulo
-
         Label
           id: holidayHint
           anchors.left: parent.left
           anchors.right: parent.right
-          anchors.top: holidayLoad.bottom
-          margin-top: 1
-          height: 12
+          anchors.top: parent.top
+          margin: 3
+          height: 16
           text-align: center
           color: #9fb2c4
           font: verdana-11px

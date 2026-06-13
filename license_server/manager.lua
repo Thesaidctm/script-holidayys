@@ -15,7 +15,7 @@ local function jqmGlobals()
 end
 
 local jqmGlobal = jqmGlobals()
-local JQM_MANAGER_VERSION = 2026061302
+local JQM_MANAGER_VERSION = 2026061303
 if jqmGlobal.JQMScriptManagerVersion == JQM_MANAGER_VERSION and type(jqmGlobal.JQMOpenManager) == "function" then
   jqmGlobal.JQMOpenManager()
   return
@@ -86,6 +86,7 @@ local jqmInternalId = type(jqmGlobal.DERPETSON_INTERNAL_ID) == "string" and jqmG
 local jqmCommandHandlers = {}
 local jqmTamperPaused = false
 local jqmLastTamperReport = {}
+local jqmCapturingScript = nil
 local jqmOpenManager = nil
 local jqmCreateWindow = nil
 local jqmScriptLabel = nil
@@ -389,7 +390,11 @@ jqmCaptureNativeSetup = function(scriptName, row, className)
   if not scriptName or not row then return false end
   local button = jqmFindSetupButton(row)
   if not button then return false end
-  if not jqmNativeHostContains(scriptName, row) and not jqmNativeClassMatches(scriptName, className) and not jqmNativeWidgetMatches(scriptName, row, className) then return false end
+  local belongsToScript = jqmCapturingScript == scriptName
+    or jqmNativeHostContains(scriptName, row)
+    or jqmNativeClassMatches(scriptName, className)
+    or jqmNativeWidgetMatches(scriptName, row, className)
+  if not belongsToScript then return false end
 
   jqmNativeRows[scriptName] = row
   jqmNativeSetupButtons[scriptName] = button
@@ -1153,7 +1158,9 @@ local function jqmRunInManagerTab(scriptName, fn)
   jqmApplyPayloadEnv(fn, scriptName)
 
   jqmTamperPaused = true
+  jqmCapturingScript = scriptName
   local ok, err = pcall(fn)
+  jqmCapturingScript = nil
   jqmTamperPaused = false
 
   if type(originalSetDefaultTab) == "function" then

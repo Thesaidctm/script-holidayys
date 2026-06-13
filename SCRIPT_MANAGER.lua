@@ -15,7 +15,7 @@ local function jqmGlobals()
 end
 
 local jqmGlobal = jqmGlobals()
-local JQM_MANAGER_VERSION = 2026061236
+local JQM_MANAGER_VERSION = 2026061301
 if jqmGlobal.JQMScriptManagerVersion == JQM_MANAGER_VERSION and type(jqmGlobal.JQMOpenManager) == "function" then
   jqmGlobal.JQMOpenManager()
   return
@@ -81,6 +81,11 @@ local jqmNativeSetupActions = {}
 local jqmAllowedScripts = {}
 local jqmPermissionsKnown = false
 local jqmAutoLoadRunning = false
+local jqmSessionToken = type(jqmGlobal.JQMSessionToken) == "string" and jqmGlobal.JQMSessionToken or ""
+local jqmInternalId = type(jqmGlobal.DERPETSON_INTERNAL_ID) == "string" and jqmGlobal.DERPETSON_INTERNAL_ID or ""
+local jqmCommandHandlers = {}
+local jqmTamperPaused = false
+local jqmLastTamperReport = {}
 local jqmOpenManager = nil
 local jqmCreateWindow = nil
 local jqmScriptLabel = nil
@@ -714,6 +719,50 @@ local function jqmUrlEncode(value)
   return value
 end
 
+local function jqmJsonString(data, key)
+  data = tostring(data or "")
+  key = tostring(key or "")
+  local pattern = '"' .. key:gsub("([^%w])", "%%%1") .. '"%s*:%s*"([^"]*)"'
+  local value = data:match(pattern)
+  if not value then return "" end
+  value = value:gsub("\\/", "/")
+  value = value:gsub('\\"', '"')
+  value = value:gsub("\\n", "\n")
+  value = value:gsub("\\r", "\r")
+  value = value:gsub("\\t", "\t")
+  return value
+end
+
+local function jqmJsonDecode(data)
+  local candidates = {}
+  if type(json) == "table" and type(json.decode) == "function" then table.insert(candidates, json.decode) end
+  if type(JSON) == "table" and type(JSON.decode) == "function" then table.insert(candidates, JSON.decode) end
+  if type(modules) == "table" and modules.corelib and type(modules.corelib.json) == "table" and type(modules.corelib.json.decode) == "function" then
+    table.insert(candidates, modules.corelib.json.decode)
+  end
+  for _, decoder in ipairs(candidates) do
+    if type(decoder) == "function" then
+      local ok, decoded = pcall(decoder, data)
+      if ok and type(decoded) == "table" then return decoded end
+    end
+  end
+  return nil
+end
+
+local function jqmSetSessionFromResponse(data)
+  local token = jqmJsonString(data, "session_token")
+  if token ~= "" then
+    jqmSessionToken = token
+    jqmGlobal.JQMSessionToken = token
+  end
+
+  local internalId = jqmJsonString(data, "internal_id")
+  if internalId ~= "" then
+    jqmInternalId = internalId
+    jqmGlobal.DERPETSON_INTERNAL_ID = internalId
+  end
+end
+
 jqmWarn = function(text)
   local message = "[JQM] " .. tostring(text or "")
   if modules and modules.game_textmessage and modules.game_textmessage.displayGameMessage then
@@ -833,8 +882,15 @@ local function jqmBaseParams(action, extra)
     hwid = machineId,
     mac = machineId,
     char = jqmPlayerName(),
-    emblem = emblemId
+    emblem = emblemId,
+    version = JQM_MANAGER_VERSION
   }
+  if jqmSessionToken ~= "" then
+    params.session_token = jqmSessionToken
+  end
+  if jqmInternalId ~= "" then
+    params.internal_id = jqmInternalId
+  end
   for key, value in pairs(extra or {}) do
     params[key] = value
   end
@@ -848,6 +904,63 @@ local function jqmBuildUrl(action, extra)
     table.insert(parts, jqmUrlEncode(key) .. "=" .. jqmUrlEncode(value))
   end
   return JQM_LICENSE_SERVER .. "?" .. table.concat(parts, "&")
+end
+
+local jqmSecurityOriginals = {
+  loadstring = loadstring,
+  load = load,
+  getfenv = getfenv,
+  setfenv = setfenv,
+  httpGet = type(HTTP) == "table" and HTTP.get or nil,
+  httpPost = type(HTTP) == "table" and HTTP.post or nil,
+  gHttpGet = type(g_http) == "table" and g_http.get or nil
+}
+
+local function jqmReportTamper(reason)
+  reason = tostring(reason or "unknown")
+  local now = type(os) == "table" and type(os.time) == "function" and os.time() or 0
+  if jqmLastTamperReport[reason] and now > 0 and now - jqmLastTamperReport[reason] < 60 then
+    return
+  end
+  jqmLastTamperReport[reason] = now
+  jqmWarn("alerta anti-tamper: " .. reason)
+  jqmHttpGet(jqmBuildUrl("tamper", { reason = reason }), function() end)
+end
+
+local function jqmCheckTamper()
+  if jqmTamperPaused then return end
+  if loadstring ~= jqmSecurityOriginals.loadstring then jqmReportTamper("loadstring alterado") end
+  if load ~= jqmSecurityOriginals.load then jqmReportTamper("load alterado") end
+  if getfenv ~= jqmSecurityOriginals.getfenv then jqmReportTamper("getfenv alterado") end
+  if setfenv ~= jqmSecurityOriginals.setfenv then jqmReportTamper("setfenv alterado") end
+  if type(HTTP) == "table" then
+    if jqmSecurityOriginals.httpGet and HTTP.get ~= jqmSecurityOriginals.httpGet then jqmReportTamper("HTTP.get alterado") end
+    if jqmSecurityOriginals.httpPost and HTTP.post ~= jqmSecurityOriginals.httpPost then jqmReportTamper("HTTP.post alterado") end
+  end
+  if type(g_http) == "table" and jqmSecurityOriginals.gHttpGet and g_http.get ~= jqmSecurityOriginals.gHttpGet then
+    jqmReportTamper("g_http.get alterado")
+  end
+end
+
+local function jqmStartAntiTamper()
+  if jqmGlobal.JQMAntiTamperVersion == JQM_MANAGER_VERSION then return end
+  jqmGlobal.JQMAntiTamperVersion = JQM_MANAGER_VERSION
+  if type(macro) == "function" then
+    pcall(function()
+      jqmGlobal.JQMAntiTamperMacro = macro(30000, function()
+        jqmCheckTamper()
+      end)
+    end)
+  elseif type(schedule) == "function" then
+    local token = (tonumber(jqmGlobal.JQMAntiTamperToken) or 0) + 1
+    jqmGlobal.JQMAntiTamperToken = token
+    local function tick()
+      if jqmGlobal.JQMAntiTamperToken ~= token then return end
+      jqmCheckTamper()
+      schedule(30000, tick)
+    end
+    schedule(30000, tick)
+  end
 end
 
 local function jqmPayloadEnv(scriptName)
@@ -976,7 +1089,9 @@ local function jqmRunInManagerTab(scriptName, fn)
   selectManagerTab()
   jqmApplyPayloadEnv(fn, scriptName)
 
+  jqmTamperPaused = true
   local ok, err = pcall(fn)
+  jqmTamperPaused = false
 
   if type(originalSetDefaultTab) == "function" then
     setDefaultTab = originalSetDefaultTab
@@ -1018,6 +1133,13 @@ local function jqmRunPayload(scriptName, data)
       jqmWarn(JQM_PENDING_MESSAGE)
     elseif responseStart:find("script_not_allowed", 1, true) then
       jqmWarn("script ainda nao liberado para este MAC.")
+    elseif responseStart:find("session_invalid", 1, true) then
+      jqmSessionToken = ""
+      jqmGlobal.JQMSessionToken = ""
+      jqmPermissionsKnown = false
+      jqmSetManagerStatus("Sessao expirada. Renovando...")
+      jqmWarn("sessao expirada, renovando autorizacao.")
+      jqmAutoLoadAllowed(true)
     else
       jqmWarn("servidor recusou: " .. responseStart:sub(1, 180))
     end
@@ -1055,6 +1177,55 @@ function JQMLoadScript(scriptName)
       return
     end
     jqmRunPayload(scriptName, data)
+  end)
+end
+
+jqmCommandHandlers.set_internal_id = function(params)
+  if type(params) ~= "table" then return end
+  local internalId = tostring(params.internal_id or "")
+  if internalId ~= "" then
+    jqmInternalId = internalId
+    jqmGlobal.DERPETSON_INTERNAL_ID = internalId
+  end
+end
+
+jqmCommandHandlers.set_allowed_scripts = function(params)
+  if type(params) ~= "table" or type(params.scripts) ~= "table" then return end
+  jqmSetAllowedScripts(params.scripts)
+  jqmRefreshManagerUi()
+end
+
+jqmCommandHandlers.enable_module = function(params)
+  if type(params) ~= "table" then return end
+  local moduleName = tostring(params.module or "")
+  if moduleName ~= "" and jqmScriptAllowed(moduleName) then
+    storage.JQMScriptManager.selected[moduleName] = jqmRuntimeLoaded[moduleName] ~= true
+  end
+end
+
+local function jqmApplyServerCommands(data)
+  local decoded = jqmJsonDecode(data)
+  if type(decoded) ~= "table" or type(decoded.commands) ~= "table" then return end
+  if type(decoded.internal_id) == "string" and decoded.internal_id ~= "" then
+    jqmInternalId = decoded.internal_id
+    jqmGlobal.DERPETSON_INTERNAL_ID = decoded.internal_id
+  end
+  for _, command in ipairs(decoded.commands) do
+    if type(command) == "table" then
+      local handler = jqmCommandHandlers[tostring(command.action or "")]
+      if type(handler) == "function" then
+        pcall(handler, command.params or {})
+      end
+    end
+  end
+end
+
+local function jqmFetchServerCommands()
+  if jqmSessionToken == "" then return end
+  jqmHttpGet(jqmBuildUrl("commands"), function(data, err)
+    if err or type(data) ~= "string" then return end
+    jqmSetSessionFromResponse(data)
+    jqmApplyServerCommands(data)
   end)
 end
 
@@ -1097,7 +1268,7 @@ jqmAutoLoadAllowed = function(force)
   jqmAutoLoadRunning = true
   jqmSetManagerStatus("Consultando permissoes...")
 
-  jqmHttpGet(jqmBuildUrl("request", { scripts = jqmAllScriptNamesCsv() }), function(data, err)
+  jqmHttpGet(jqmBuildUrl("handshake", { scripts = jqmAllScriptNamesCsv() }), function(data, err)
     jqmAutoLoadRunning = false
     if err or not data then
       jqmSetManagerStatus("Falha ao consultar permissoes")
@@ -1106,6 +1277,7 @@ jqmAutoLoadAllowed = function(force)
     end
 
     if data:find('"ok":true', 1, true) or data:find('"ok": true', 1, true) then
+      jqmSetSessionFromResponse(data)
       local allowed = jqmScriptsFromResponse(data)
       jqmSetAllowedScripts(allowed)
       jqmRefreshManagerUi()
@@ -1114,6 +1286,7 @@ jqmAutoLoadAllowed = function(force)
         jqmWarn("nenhum script liberado para este MAC.")
         return
       end
+      jqmFetchServerCommands()
       jqmSetManagerStatus("Carregando liberados...")
       jqmLoadAllowedScripts()
       return
@@ -2125,6 +2298,7 @@ elseif UI and UI.Button then
 end
 
 jqmRefreshManagerUi()
+jqmStartAntiTamper()
 if jqmGlobal.JQMScriptManagerAutoLoadVersion ~= JQM_MANAGER_VERSION then
   jqmGlobal.JQMScriptManagerAutoLoadVersion = JQM_MANAGER_VERSION
   jqmAutoLoadAllowed(false)

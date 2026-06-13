@@ -7,6 +7,7 @@ const CONFIG_FILE = __DIR__ . '/config.php';
 const SETTINGS_FILE = DATA_DIR . '/settings.json';
 const LICENSES_FILE = DATA_DIR . '/licenses.json';
 const PENDING_FILE = DATA_DIR . '/pending_devices.json';
+const SESSIONS_FILE = DATA_DIR . '/sessions.json';
 const EVENTS_FILE = DATA_DIR . '/events.log';
 
 define('JQM_LICENSE_APP', true);
@@ -149,6 +150,7 @@ function mysql_create_schema(): void
     $devices = mysql_table('devices');
     $pending = mysql_table('pending_devices');
     $events = mysql_table('events');
+    $sessions = mysql_table('sessions');
     $pdo = db();
 
     $pdo->exec("CREATE TABLE IF NOT EXISTS `$settings` (
@@ -230,6 +232,27 @@ function mysql_create_schema(): void
         PRIMARY KEY (`id`),
         KEY `event_time` (`event_time`),
         KEY `event_type` (`event_type`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS `$sessions` (
+        `token_hash` char(64) NOT NULL,
+        `license_key` varchar(64) NOT NULL,
+        `device_hash` char(64) NOT NULL,
+        `hwid_hash` char(64) NOT NULL DEFAULT '',
+        `mac_hash` char(64) NOT NULL DEFAULT '',
+        `char_name` text NOT NULL,
+        `ip` varchar(64) NOT NULL DEFAULT '',
+        `client_version` varchar(60) NOT NULL DEFAULT '',
+        `internal_id` char(64) NOT NULL,
+        `allowed_scripts` mediumtext NOT NULL,
+        `created_at` varchar(40) NOT NULL,
+        `last_seen_at` varchar(40) NOT NULL,
+        `expires_at` varchar(40) NOT NULL,
+        `revoked` tinyint(1) NOT NULL DEFAULT 0,
+        PRIMARY KEY (`token_hash`),
+        KEY `license_key` (`license_key`),
+        KEY `device_hash` (`device_hash`),
+        KEY `expires_at` (`expires_at`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 }
 
@@ -769,6 +792,241 @@ function license_allows_script(array $license, string $script): bool
     return in_array('*', $allowed, true) || in_array($script, $allowed, true);
 }
 
+function allowed_scripts_for_license(array $license, array $requestedScripts, array $availableNames): array
+{
+    $requested = $requestedScripts;
+    if (!$requested) {
+        $requested = $availableNames;
+    }
+    $requested = array_values(array_filter($requested, function ($name) use ($availableNames) {
+        return $name !== '*' && in_array($name, $availableNames, true);
+    }));
+
+    $allowed = script_list_from_input($license['allowed_scripts'] ?? []);
+    if (in_array('*', $allowed, true)) {
+        return $requested;
+    }
+
+    return array_values(array_filter($requested, function ($name) use ($allowed) {
+        return in_array($name, $allowed, true);
+    }));
+}
+
+function session_ttl_seconds(): int
+{
+    return 300;
+}
+
+function session_token_hash(string $token): string
+{
+    return hash_value('session|' . $token);
+}
+
+function session_internal_id(string $licenseKey, string $deviceId, string $token): string
+{
+    return hash('sha256', server_secret() . '|internal|' . $licenseKey . '|' . $deviceId . '|' . $token);
+}
+
+function runtime_sessions(): array
+{
+    if (use_mysql()) {
+        mysql_create_schema();
+        $rows = db()->query('SELECT * FROM `' . mysql_table('sessions') . '`')->fetchAll();
+        $sessions = [];
+        foreach ($rows as $row) {
+            $allowed = json_decode((string)$row['allowed_scripts'], true);
+            $sessions[(string)$row['token_hash']] = [
+                'token_hash' => (string)$row['token_hash'],
+                'license_key' => (string)$row['license_key'],
+                'device_hash' => (string)$row['device_hash'],
+                'hwid_hash' => (string)$row['hwid_hash'],
+                'mac_hash' => (string)$row['mac_hash'],
+                'char' => (string)$row['char_name'],
+                'ip' => (string)$row['ip'],
+                'client_version' => (string)$row['client_version'],
+                'internal_id' => (string)$row['internal_id'],
+                'allowed_scripts' => is_array($allowed) ? $allowed : [],
+                'created_at' => (string)$row['created_at'],
+                'last_seen_at' => (string)$row['last_seen_at'],
+                'expires_at' => (string)$row['expires_at'],
+                'revoked' => (bool)$row['revoked'],
+            ];
+        }
+        return $sessions;
+    }
+
+    $data = read_json_file(SESSIONS_FILE, ['sessions' => []]);
+    return isset($data['sessions']) && is_array($data['sessions']) ? $data['sessions'] : [];
+}
+
+function save_runtime_sessions(array $sessions): void
+{
+    if (use_mysql()) {
+        mysql_create_schema();
+        $stmt = db()->prepare('REPLACE INTO `' . mysql_table('sessions') . '` (`token_hash`, `license_key`, `device_hash`, `hwid_hash`, `mac_hash`, `char_name`, `ip`, `client_version`, `internal_id`, `allowed_scripts`, `created_at`, `last_seen_at`, `expires_at`, `revoked`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        foreach ($sessions as $session) {
+            $stmt->execute([
+                (string)($session['token_hash'] ?? ''),
+                (string)($session['license_key'] ?? ''),
+                (string)($session['device_hash'] ?? ''),
+                (string)($session['hwid_hash'] ?? ''),
+                (string)($session['mac_hash'] ?? ''),
+                (string)($session['char'] ?? ''),
+                (string)($session['ip'] ?? ''),
+                (string)($session['client_version'] ?? ''),
+                (string)($session['internal_id'] ?? ''),
+                json_encode(array_values((array)($session['allowed_scripts'] ?? [])), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                (string)($session['created_at'] ?? now_iso()),
+                (string)($session['last_seen_at'] ?? now_iso()),
+                (string)($session['expires_at'] ?? gmdate('c', time() + session_ttl_seconds())),
+                !empty($session['revoked']) ? 1 : 0,
+            ]);
+        }
+        return;
+    }
+
+    write_json_file(SESSIONS_FILE, ['sessions' => $sessions]);
+}
+
+function cleanup_runtime_sessions(): void
+{
+    if (use_mysql()) {
+        mysql_create_schema();
+        try {
+            $stmt = db()->prepare('DELETE FROM `' . mysql_table('sessions') . '` WHERE `expires_at` < ?');
+            $stmt->execute([gmdate('c', time() - 300)]);
+        } catch (Throwable $e) {
+            // Limpeza falhou, mas a validacao de expiracao continua bloqueando a sessao.
+        }
+        return;
+    }
+
+    $sessions = runtime_sessions();
+    $now = time();
+    $changed = false;
+    foreach ($sessions as $hash => $session) {
+        $expiresAt = strtotime((string)($session['expires_at'] ?? '')) ?: 0;
+        if ($expiresAt > 0 && $expiresAt < $now - 300) {
+            unset($sessions[$hash]);
+            $changed = true;
+        }
+    }
+    if ($changed) {
+        save_runtime_sessions($sessions);
+    }
+}
+
+function create_runtime_session(string $licenseKey, array $license, array $deviceRecord, string $clientVersion, array $allowedScripts): array
+{
+    cleanup_runtime_sessions();
+
+    $token = bin2hex(random_bytes(32));
+    $tokenHash = session_token_hash($token);
+    $deviceId = (string)($deviceRecord['device_hash'] ?? '');
+    $session = [
+        'token_hash' => $tokenHash,
+        'license_key' => $licenseKey,
+        'device_hash' => $deviceId,
+        'hwid_hash' => (string)($deviceRecord['hwid_hash'] ?? ''),
+        'mac_hash' => (string)($deviceRecord['mac_hash'] ?? ''),
+        'char' => (string)($deviceRecord['char'] ?? ''),
+        'ip' => client_ip(),
+        'client_version' => substr($clientVersion, 0, 60),
+        'internal_id' => session_internal_id($licenseKey, $deviceId, $token),
+        'allowed_scripts' => array_values($allowedScripts),
+        'created_at' => now_iso(),
+        'last_seen_at' => now_iso(),
+        'expires_at' => gmdate('c', time() + session_ttl_seconds()),
+        'revoked' => false,
+    ];
+
+    $sessions = runtime_sessions();
+    $sessions[$tokenHash] = $session;
+    save_runtime_sessions($sessions);
+
+    $session['token'] = $token;
+    return $session;
+}
+
+function runtime_session_from_token(string $token): array
+{
+    $token = trim($token);
+    if ($token === '') {
+        return [];
+    }
+
+    $hash = session_token_hash($token);
+    $sessions = runtime_sessions();
+    if (!isset($sessions[$hash]) || !is_array($sessions[$hash])) {
+        return [];
+    }
+
+    $session = $sessions[$hash];
+    if (!empty($session['revoked'])) {
+        return [];
+    }
+    $expiresAt = strtotime((string)($session['expires_at'] ?? '')) ?: 0;
+    if ($expiresAt <= time()) {
+        return [];
+    }
+
+    return $session;
+}
+
+function touch_runtime_session(array $session): void
+{
+    $hash = (string)($session['token_hash'] ?? '');
+    if ($hash === '') {
+        return;
+    }
+    $session['last_seen_at'] = now_iso();
+    $sessions = runtime_sessions();
+    $sessions[$hash] = $session;
+    save_runtime_sessions($sessions);
+}
+
+function session_matches_device(array $session, string $hwid, string $mac): bool
+{
+    $deviceId = device_fingerprint($hwid, $mac);
+    return hash_equals((string)($session['device_hash'] ?? ''), $deviceId);
+}
+
+function session_allows_script(array $session, string $script): bool
+{
+    $allowed = script_list_from_input($session['allowed_scripts'] ?? []);
+    return in_array($script, $allowed, true);
+}
+
+function server_commands_for_session(array $session): array
+{
+    $commands = [
+        [
+            'module' => 'system',
+            'action' => 'set_internal_id',
+            'params' => [
+                'internal_id' => (string)($session['internal_id'] ?? ''),
+            ],
+        ],
+        [
+            'module' => 'system',
+            'action' => 'set_allowed_scripts',
+            'params' => [
+                'scripts' => array_values(script_list_from_input($session['allowed_scripts'] ?? [])),
+            ],
+        ],
+    ];
+
+    foreach (script_list_from_input($session['allowed_scripts'] ?? []) as $script) {
+        $commands[] = [
+            'module' => $script,
+            'action' => 'enable_module',
+            'params' => ['module' => $script],
+        ];
+    }
+
+    return $commands;
+}
+
 function public_script_list(): array
 {
     $scripts = [];
@@ -802,8 +1060,13 @@ function protect_lua(string $source, array $watermark): string
         '-- Jequi Multi Assessoria protected payload',
         '-- license=' . $commentValue($watermark['license'] ?? ''),
         '-- owner=' . $commentValue($watermark['owner'] ?? ''),
+        '-- internal=' . $commentValue($watermark['internal_id'] ?? ''),
         '-- issued=' . now_iso(),
     ];
+
+    $luaString = static function ($value): string {
+        return '"' . addcslashes((string)$value, "\\\"\n\r\t") . '"';
+    };
 
     $bytes = unpack('C*', $source);
     $chunks = [];
@@ -823,6 +1086,10 @@ function protect_lua(string $source, array $watermark): string
     }
 
     $lines = $header;
+    $lines[] = 'local _g=_G or _ENV or {}';
+    $lines[] = '_g.DERPETSON_INTERNAL_ID=' . $luaString((string)($watermark['internal_id'] ?? ''));
+    $lines[] = '_g.DERPETSON_LICENSE_TRACE=' . $luaString(hash('sha256', (string)($watermark['license'] ?? '') . '|' . (string)($watermark['internal_id'] ?? '')));
+    $lines[] = '_g.DERPETSON_SESSION_ISSUED=' . $luaString(now_iso());
     $lines[] = 'local _p={';
     foreach ($chunks as $part) {
         $lines[] = '  "' . $part . '",';

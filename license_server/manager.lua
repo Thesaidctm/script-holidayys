@@ -15,7 +15,7 @@ local function jqmGlobals()
 end
 
 local jqmGlobal = jqmGlobals()
-local JQM_MANAGER_VERSION = 2026061234
+local JQM_MANAGER_VERSION = 2026061235
 if jqmGlobal.JQMScriptManagerVersion == JQM_MANAGER_VERSION and type(jqmGlobal.JQMOpenManager) == "function" then
   jqmGlobal.JQMOpenManager()
   return
@@ -399,9 +399,11 @@ jqmPrepareProxySetup = function(scriptName)
   if not item or not prefix then return end
 
   local loadButton = jqmWindowControl(prefix .. "Load")
+  local action = jqmWindowControl(prefix .. "Action")
   local hint = jqmWindowControl(prefix .. "Hint")
   local gear = jqmWindowControl(prefix .. "Gear")
   jqmSetText(gear, "SETUP")
+  jqmSetVisible(action, true)
   jqmSetVisible(hint, true)
   if not jqmNativeSetupButtons[scriptName] and not jqmNativeSetupActions[scriptName] then
     jqmFindExistingNativeRow(scriptName)
@@ -409,12 +411,16 @@ jqmPrepareProxySetup = function(scriptName)
 
   if jqmNativeSetupButtons[scriptName] or jqmNativeSetupActions[scriptName] then
     jqmSetVisible(loadButton, false)
-    jqmSetText(hint, "Clique em SETUP para configurar.")
+    jqmSetText(action, "Clique em SETUP para configurar.")
+    jqmSetText(hint, "")
+    jqmSetColor(action, "#83f5a8")
     jqmSetColor(hint, "#7ee8a8")
     jqmSetBackground(gear, "#1f6f3add")
   else
     jqmSetVisible(loadButton, false)
-    jqmSetText(hint, "Setup original nao capturado.")
+    jqmSetText(action, "Setup original nao capturado.")
+    jqmSetText(hint, "")
+    jqmSetColor(action, "#ffd36b")
     jqmSetColor(hint, "#ffd36b")
     jqmSetBackground(gear, "#6f531fdd")
   end
@@ -517,6 +523,7 @@ local function jqmUpdateModuleCard(item, hover)
   local badge = jqmWindowControl(prefix .. "Badge")
   local gear = jqmWindowControl(prefix .. "Gear")
   local loadButton = jqmWindowControl(prefix .. "Load")
+  local action = jqmWindowControl(prefix .. "Action")
   local hint = jqmWindowControl(prefix .. "Hint")
   local statusText, statusColor, bgColor, titleColor = jqmModuleStatus(item.name)
   local setupReady = jqmNativeSetupButtons[item.name] or jqmNativeSetupActions[item.name]
@@ -533,25 +540,36 @@ local function jqmUpdateModuleCard(item, hover)
   if jqmRuntimeLoaded[item.name] == true then
     jqmSetText(gear, "SETUP")
     jqmSetVisible(loadButton, false)
+    jqmSetVisible(action, true)
     jqmSetVisible(hint, true)
     if setupReady then
-      jqmSetText(hint, "Clique em SETUP para configurar.")
+      jqmSetText(action, "Clique em SETUP para configurar.")
+      jqmSetText(hint, "")
+      jqmSetColor(action, "#83f5a8")
       jqmSetColor(hint, "#7ee8a8")
     else
-      jqmSetText(hint, "Setup original nao capturado.")
+      jqmSetText(action, "Setup original nao capturado.")
+      jqmSetText(hint, "")
+      jqmSetColor(action, "#ffd36b")
       jqmSetColor(hint, "#ffd36b")
     end
   elseif storage.JQMScriptManager.selected[item.name] == true then
     jqmSetText(gear, "Carregar")
     jqmSetVisible(loadButton, false)
+    jqmSetVisible(action, true)
     jqmSetVisible(hint, true)
-    jqmSetText(hint, "Marcado. Clique em Carregar para iniciar.")
+    jqmSetText(action, "Carregar agora")
+    jqmSetText(hint, "Aguardando carregamento.")
+    jqmSetColor(action, "#e6c06b")
     jqmSetColor(hint, "#ffd36b")
   else
     jqmSetText(gear, "Carregar")
     jqmSetVisible(loadButton, false)
+    jqmSetVisible(action, true)
     jqmSetVisible(hint, true)
-    jqmSetText(hint, "Clique em Carregar para ativar.")
+    jqmSetText(action, "Clique em Carregar para ativar.")
+    jqmSetText(hint, "")
+    jqmSetColor(action, "#d8e0e0")
     jqmSetColor(hint, "#9fb2c4")
   end
   jqmSetColor(badge, statusColor)
@@ -1070,12 +1088,12 @@ local function jqmLoadManagerUi()
   local ok = pcall(function()
     g_ui.loadUIFromString([[
 DerpetsonScriptHubPanel < Panel
-  height: 56
+  height: 58
   margin-top: 4
   padding: 5
   image-source: /images/ui/panel_flat
   image-border: 5
-  background-color: #10161ddd
+  background-color: #0d1719ee
 
   Label
     id: title
@@ -1083,9 +1101,9 @@ DerpetsonScriptHubPanel < Panel
     anchors.left: parent.left
     anchors.right: open.left
     margin-right: 5
-    height: 15
+    height: 16
     text-align: left
-    color: #ffd36b
+    color: #f0c76a
     font: verdana-11px-bold
     text: Derpetson Scripts
 
@@ -1098,7 +1116,7 @@ DerpetsonScriptHubPanel < Panel
     margin-right: 5
     height: 14
     text-align: left
-    color: #dce4ee
+    color: #d5e8df
     font: verdana-11px
     text: Central de acesso
 
@@ -1111,7 +1129,7 @@ DerpetsonScriptHubPanel < Panel
     margin-right: 5
     height: 16
     text-align: left
-    color: #7ee8a8
+    color: #7df0a1
     font: verdana-11px-bold
     text: Selecionar scripts
 
@@ -1119,14 +1137,16 @@ DerpetsonScriptHubPanel < Panel
     id: open
     anchors.top: parent.top
     anchors.right: parent.right
-    width: 50
-    height: 44
+    width: 52
+    height: 46
+    color: #ffffff
+    background-color: #263747dd
     text-align: center
     text: Abrir
 
 DerpetsonScriptsWindow < MainWindow
   text: Derpetson Scripts
-  size: 470 560
+  size: 480 585
   padding: 10
   @onEscape: self:hide()
 
@@ -1135,22 +1155,45 @@ DerpetsonScriptsWindow < MainWindow
     anchors.top: parent.top
     anchors.left: parent.left
     anchors.right: parent.right
-    height: 66
+    height: 76
     image-source: /images/ui/panel_flat
     image-border: 5
-    padding: 7
-    background-color: #10161dee
+    padding: 8
+    background-color: #0b1518ee
+
+    Label
+      id: headerRuneLeft
+      anchors.left: parent.left
+      anchors.top: parent.top
+      width: 48
+      height: 18
+      text-align: left
+      color: #385354
+      font: verdana-11px-bold
+      text: <::>
+
+    Label
+      id: headerRuneRight
+      anchors.right: parent.right
+      anchors.top: parent.top
+      width: 48
+      height: 18
+      text-align: right
+      color: #385354
+      font: verdana-11px-bold
+      text: <::>
 
     Label
       id: title
       anchors.top: parent.top
       anchors.left: parent.left
       anchors.right: parent.right
-      height: 18
+      margin-top: 2
+      height: 20
       text-align: center
-      color: #ffd36b
+      color: #f0c76a
       font: verdana-11px-bold
-      text: DERPETSON SCRIPTS
+      text: Derpetson Scripts
 
     Label
       id: subtitle
@@ -1160,7 +1203,7 @@ DerpetsonScriptsWindow < MainWindow
       margin-top: 3
       height: 15
       text-align: center
-      color: #e8edf4
+      color: #e8f5ee
       font: verdana-11px
       text: Central simples para scripts liberados
 
@@ -1169,10 +1212,10 @@ DerpetsonScriptsWindow < MainWindow
       anchors.top: subtitle.bottom
       anchors.left: parent.left
       anchors.right: parent.right
-      margin-top: 3
+      margin-top: 4
       height: 15
       text-align: center
-      color: #7ee8a8
+      color: #83f5a8
       font: verdana-11px-bold
       text: Nenhum script selecionado
 
@@ -1182,11 +1225,11 @@ DerpetsonScriptsWindow < MainWindow
     anchors.left: parent.left
     anchors.right: parent.right
     margin-top: 9
-    height: 380
+    height: 396
     image-source: /images/ui/panel_flat
     image-border: 5
-    padding: 7
-    background-color: #10151bdd
+    padding: 8
+    background-color: #0d171add
 
     Label
       id: combatCategory
@@ -1194,7 +1237,7 @@ DerpetsonScriptsWindow < MainWindow
       anchors.left: parent.left
       anchors.right: parent.right
       height: 15
-      color: #ffd36b
+      color: #f0c76a
       font: verdana-11px-bold
       text: [ATK] COMBATE
 
@@ -1204,20 +1247,31 @@ DerpetsonScriptsWindow < MainWindow
       anchors.left: parent.left
       anchors.right: parent.right
       margin-top: 3
-      height: 72
-      padding: 5
+      height: 78
+      padding: 6
       image-source: /images/ui/panel_flat
       image-border: 5
-      background-color: #171b22dd
+      background-color: #182126e8
+
+      Label
+        id: comboRune
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        width: 48
+        height: 14
+        text-align: right
+        color: #344747
+        font: verdana-11px-bold
+        text: r:atk
 
       Label
         id: comboIcon
         anchors.left: parent.left
         anchors.top: parent.top
-        width: 28
-        height: 60
+        width: 30
+        height: 64
         text-align: center
-        color: #ffd36b
+        color: #f0c76a
         font: verdana-11px-bold
         text: ATK
 
@@ -1229,7 +1283,7 @@ DerpetsonScriptsWindow < MainWindow
         margin-left: 4
         margin-right: 4
         height: 16
-        color: #cfd8e3
+        color: #f0c76a
         font: verdana-11px-bold
         text: COMBO ESPART V3
 
@@ -1241,7 +1295,7 @@ DerpetsonScriptsWindow < MainWindow
         margin-left: 4
         margin-top: 1
         height: 14
-        color: #9fb2c4
+        color: #b6c4c7
         font: verdana-11px
         text: Combo, runas e prioridades
 
@@ -1261,8 +1315,10 @@ DerpetsonScriptsWindow < MainWindow
         id: comboGear
         anchors.right: parent.right
         anchors.top: parent.top
-        width: 58
+        width: 62
         height: 28
+        color: #ffffff
+        background-color: #263747dd
         text: Carregar
 
       Panel
@@ -1271,23 +1327,34 @@ DerpetsonScriptsWindow < MainWindow
         anchors.right: parent.right
         anchors.top: comboDesc.bottom
         margin-top: 6
-        height: 24
+        height: 30
         padding: 1
         image-source: /images/ui/panel_flat
         image-border: 5
-        background-color: #0d121add
+        background-color: #0b1114dd
+
+        Label
+          id: comboAction
+          anchors.left: parent.left
+          anchors.right: parent.right
+          anchors.top: parent.top
+          margin-top: 2
+          height: 14
+          text-align: center
+          color: #e9f4f0
+          font: verdana-11px-bold
+          text: Clique em Carregar para ativar.
 
         Label
           id: comboHint
           anchors.left: parent.left
           anchors.right: parent.right
-          anchors.top: parent.top
-          margin: 3
-          height: 16
+          anchors.top: comboAction.bottom
+          height: 12
           text-align: center
           color: #9fb2c4
           font: verdana-11px
-          text: Clique em Carregar para ativar.
+          text:
 
     Label
       id: castleCategory
@@ -1296,7 +1363,7 @@ DerpetsonScriptsWindow < MainWindow
       anchors.right: parent.right
       margin-top: 8
       height: 15
-      color: #ffd36b
+      color: #f0c76a
       font: verdana-11px-bold
       text: [CST] CASTLE
 
@@ -1306,20 +1373,31 @@ DerpetsonScriptsWindow < MainWindow
       anchors.left: parent.left
       anchors.right: parent.right
       margin-top: 3
-      height: 72
-      padding: 5
+      height: 78
+      padding: 6
       image-source: /images/ui/panel_flat
       image-border: 5
-      background-color: #171b22dd
+      background-color: #182126e8
+
+      Label
+        id: castleRune
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        width: 48
+        height: 14
+        text-align: right
+        color: #344747
+        font: verdana-11px-bold
+        text: r:cst
 
       Label
         id: castleIcon
         anchors.left: parent.left
         anchors.top: parent.top
-        width: 28
-        height: 60
+        width: 30
+        height: 64
         text-align: center
-        color: #ffd36b
+        color: #f0c76a
         font: verdana-11px-bold
         text: CST
 
@@ -1331,7 +1409,7 @@ DerpetsonScriptsWindow < MainWindow
         margin-left: 4
         margin-right: 4
         height: 16
-        color: #cfd8e3
+        color: #f0c76a
         font: verdana-11px-bold
         text: CASTLE PRO
 
@@ -1343,7 +1421,7 @@ DerpetsonScriptsWindow < MainWindow
         margin-left: 4
         margin-top: 1
         height: 14
-        color: #9fb2c4
+        color: #b6c4c7
         font: verdana-11px
         text: Castle, seguranca e logout
 
@@ -1363,8 +1441,10 @@ DerpetsonScriptsWindow < MainWindow
         id: castleGear
         anchors.right: parent.right
         anchors.top: parent.top
-        width: 58
+        width: 62
         height: 28
+        color: #ffffff
+        background-color: #263747dd
         text: Carregar
 
       Panel
@@ -1373,23 +1453,34 @@ DerpetsonScriptsWindow < MainWindow
         anchors.right: parent.right
         anchors.top: castleDesc.bottom
         margin-top: 6
-        height: 24
+        height: 30
         padding: 1
         image-source: /images/ui/panel_flat
         image-border: 5
-        background-color: #0d121add
+        background-color: #0b1114dd
+
+        Label
+          id: castleAction
+          anchors.left: parent.left
+          anchors.right: parent.right
+          anchors.top: parent.top
+          margin-top: 2
+          height: 14
+          text-align: center
+          color: #e9f4f0
+          font: verdana-11px-bold
+          text: Clique em Carregar para ativar.
 
         Label
           id: castleHint
           anchors.left: parent.left
           anchors.right: parent.right
-          anchors.top: parent.top
-          margin: 3
-          height: 16
+          anchors.top: castleAction.bottom
+          height: 12
           text-align: center
           color: #9fb2c4
           font: verdana-11px
-          text: Clique em Carregar para ativar.
+          text:
 
     Label
       id: defenseCategory
@@ -1398,7 +1489,7 @@ DerpetsonScriptsWindow < MainWindow
       anchors.right: parent.right
       margin-top: 8
       height: 15
-      color: #ffd36b
+      color: #f0c76a
       font: verdana-11px-bold
       text: [DEF] DEFESA
 
@@ -1408,20 +1499,31 @@ DerpetsonScriptsWindow < MainWindow
       anchors.left: parent.left
       anchors.right: parent.right
       margin-top: 3
-      height: 72
-      padding: 5
+      height: 78
+      padding: 6
       image-source: /images/ui/panel_flat
       image-border: 5
-      background-color: #171b22dd
+      background-color: #182126e8
+
+      Label
+        id: holidayRune
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        width: 48
+        height: 14
+        text-align: right
+        color: #344747
+        font: verdana-11px-bold
+        text: r:def
 
       Label
         id: holidayIcon
         anchors.left: parent.left
         anchors.top: parent.top
-        width: 28
-        height: 60
+        width: 30
+        height: 64
         text-align: center
-        color: #ffd36b
+        color: #f0c76a
         font: verdana-11px-bold
         text: DEF
 
@@ -1433,7 +1535,7 @@ DerpetsonScriptsWindow < MainWindow
         margin-left: 4
         margin-right: 4
         height: 16
-        color: #cfd8e3
+        color: #f0c76a
         font: verdana-11px-bold
         text: HOLIDAY AOE
 
@@ -1445,7 +1547,7 @@ DerpetsonScriptsWindow < MainWindow
         margin-left: 4
         margin-top: 1
         height: 14
-        color: #9fb2c4
+        color: #b6c4c7
         font: verdana-11px
         text: Area, combo e PvP
 
@@ -1465,8 +1567,10 @@ DerpetsonScriptsWindow < MainWindow
         id: holidayGear
         anchors.right: parent.right
         anchors.top: parent.top
-        width: 58
+        width: 62
         height: 28
+        color: #ffffff
+        background-color: #263747dd
         text: Carregar
 
       Panel
@@ -1475,23 +1579,34 @@ DerpetsonScriptsWindow < MainWindow
         anchors.right: parent.right
         anchors.top: holidayDesc.bottom
         margin-top: 6
-        height: 24
+        height: 30
         padding: 1
         image-source: /images/ui/panel_flat
         image-border: 5
-        background-color: #0d121add
+        background-color: #0b1114dd
+
+        Label
+          id: holidayAction
+          anchors.left: parent.left
+          anchors.right: parent.right
+          anchors.top: parent.top
+          margin-top: 2
+          height: 14
+          text-align: center
+          color: #e9f4f0
+          font: verdana-11px-bold
+          text: Clique em Carregar para ativar.
 
         Label
           id: holidayHint
           anchors.left: parent.left
           anchors.right: parent.right
-          anchors.top: parent.top
-          margin: 3
-          height: 16
+          anchors.top: holidayAction.bottom
+          height: 12
           text-align: center
           color: #9fb2c4
           font: verdana-11px
-          text: Setup aparece apos carregar
+          text:
 
     Label
       id: utilityCategory
@@ -1500,7 +1615,7 @@ DerpetsonScriptsWindow < MainWindow
       anchors.right: parent.right
       margin-top: 8
       height: 15
-      color: #ffd36b
+      color: #f0c76a
       font: verdana-11px-bold
       text: [CFG] UTILIDADES
 
@@ -1510,20 +1625,20 @@ DerpetsonScriptsWindow < MainWindow
       anchors.left: parent.left
       anchors.right: parent.right
       margin-top: 3
-      height: 34
-      padding: 5
+      height: 40
+      padding: 6
       image-source: /images/ui/panel_flat
       image-border: 5
-      background-color: #151a20dd
+      background-color: #182126e8
 
       Label
         id: updateIcon
         anchors.left: parent.left
         anchors.top: parent.top
-        width: 28
-        height: 24
+        width: 30
+        height: 28
         text-align: center
-        color: #ffd36b
+        color: #f0c76a
         font: verdana-11px-bold
         text: CFG
 
@@ -1535,7 +1650,7 @@ DerpetsonScriptsWindow < MainWindow
         margin-left: 4
         margin-right: 4
         height: 15
-        color: #e8fff0
+        color: #f0c76a
         font: verdana-11px-bold
         text: Atualizador
 
@@ -1567,18 +1682,20 @@ DerpetsonScriptsWindow < MainWindow
     anchors.left: parent.left
     anchors.right: parent.right
     margin-top: 8
-    height: 40
-    background-color: #101620dd
+    height: 44
+    image-source: /images/ui/panel_flat
+    image-border: 5
+    background-color: #0b1116ee
 
     Label
       id: helpTitle
       anchors.top: parent.top
       anchors.left: parent.left
       anchors.right: parent.right
-      margin-top: 5
+      margin-top: 6
       height: 15
       text-align: center
-      color: #ffd36b
+      color: #f0c76a
       font: verdana-11px-bold
       text: Status
 
@@ -1590,7 +1707,7 @@ DerpetsonScriptsWindow < MainWindow
       margin-top: 3
       height: 15
       text-align: center
-      color: #dce4ee
+      color: #d8e0e0
       font: verdana-11px
       text: Ativo / Marcado / Inativo
 
@@ -1599,14 +1716,16 @@ DerpetsonScriptsWindow < MainWindow
     anchors.left: parent.left
     anchors.right: parent.right
     anchors.bottom: parent.bottom
-    height: 28
+    height: 30
 
     Button
       id: allButton
       anchors.left: parent.left
       anchors.top: parent.top
       width: 72
-      height: 24
+      height: 26
+      color: #e8edf4
+      background-color: #242a30dd
       text: Todos
 
     Button
@@ -1615,7 +1734,9 @@ DerpetsonScriptsWindow < MainWindow
       anchors.top: parent.top
       margin-left: 5
       width: 66
-      height: 24
+      height: 26
+      color: #e8edf4
+      background-color: #242a30dd
       text: Limpar
 
     Button
@@ -1625,7 +1746,9 @@ DerpetsonScriptsWindow < MainWindow
       anchors.top: parent.top
       margin-left: 5
       margin-right: 5
-      height: 24
+      height: 26
+      color: #ffffff
+      background-color: #314351dd
       text: Carregar todos
 
     Button
@@ -1633,7 +1756,9 @@ DerpetsonScriptsWindow < MainWindow
       anchors.right: parent.right
       anchors.top: parent.top
       width: 62
-      height: 24
+      height: 26
+      color: #e8edf4
+      background-color: #242a30dd
       text: Fechar
 ]])
   end)

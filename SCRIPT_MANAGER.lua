@@ -15,7 +15,7 @@ local function jqmGlobals()
 end
 
 local jqmGlobal = jqmGlobals()
-local JQM_MANAGER_VERSION = 2026061306
+local JQM_MANAGER_VERSION = 2026061307
 if jqmGlobal.JQMScriptManagerVersion == JQM_MANAGER_VERSION and type(jqmGlobal.JQMOpenManager) == "function" then
   if type(jqmGlobal.JQMRefreshAccess) == "function" then
     pcall(function() jqmGlobal.JQMRefreshAccess(true) end)
@@ -40,31 +40,36 @@ jqmGlobal.JQMScriptManagerRuntimeVersion = JQM_MANAGER_VERSION
 local JQM_SCRIPTS = {
   { name = "combo", label = "COMBO ESPART V3", short = "COMBO ESPART", file = "COMBO_ESPART_V3.lua", desc = "Combo, runas e prioridades", category = "COMBATE", icon = "ATK" },
   { name = "castle_manager", label = "CASTLE PRO", short = "CASTLE PRO", file = "CASTLE_MANAGER_LOGOUT.lua", desc = "Castle, seguranca e logout", category = "CASTLE", icon = "CST" },
-  { name = "holiday_aoe", label = "HOLIDAY AOE", short = "HOLIDAY AOE", file = "holiday_aoe.lua", desc = "Area, combo e PvP", category = "DEFESA", icon = "DEF" }
+  { name = "holiday_aoe", label = "HOLIDAY AOE", short = "HOLIDAY AOE", file = "holiday_aoe.lua", desc = "Area, combo e PvP", category = "DEFESA", icon = "DEF" },
+  { name = "exalted_wolf", label = "EXALTED WOLF", short = "EXALTED WOLF", file = "exalted_wolf.lua", desc = "Guild, rastro e lideres", category = "UTILIDADES", icon = "WLF" }
 }
 
 local JQM_SWITCH_IDS = {
   combo = "comboCard",
   holiday_aoe = "holidayCard",
-  castle_manager = "castleCard"
+  castle_manager = "castleCard",
+  exalted_wolf = "wolfCard"
 }
 
 local JQM_CARD_PREFIX = {
   combo = "combo",
   holiday_aoe = "holiday",
-  castle_manager = "castle"
+  castle_manager = "castle",
+  exalted_wolf = "wolf"
 }
 
 local JQM_CATEGORY_CONTROLS = {
   combo = "combatCategory",
   holiday_aoe = "defenseCategory",
-  castle_manager = "castleCategory"
+  castle_manager = "castleCategory",
+  exalted_wolf = "wolfCategory"
 }
 
 local JQM_NATIVE_TITLES = {
   combo = { "COMBO ESPART", "COMBO ESPART V3" },
   holiday_aoe = { "Holiday AOE", "HOLIDAY AOE" },
-  castle_manager = { "Castle Manager", "CASTLE PRO", "Castle_Manager" }
+  castle_manager = { "Castle Manager", "CASTLE PRO", "Castle_Manager" },
+  exalted_wolf = { "Exalted Wolf", "Exalted Wolf Guild", "EWOLF" }
 }
 
 local JQM_NATIVE_WIDGET_CLASSES = {
@@ -1601,7 +1606,7 @@ DerpetsonScriptHubPanel < Panel
 
 DerpetsonScriptsWindow < MainWindow
   text: Derpetson Scripts
-  size: 480 585
+  size: 480 690
   padding: 10
   @onEscape: self:hide()
 
@@ -1680,7 +1685,7 @@ DerpetsonScriptsWindow < MainWindow
     anchors.left: parent.left
     anchors.right: parent.right
     margin-top: 9
-    height: 396
+    height: 500
     image-source: /images/ui/panel_flat
     image-border: 5
     padding: 8
@@ -2064,8 +2069,134 @@ DerpetsonScriptsWindow < MainWindow
           text:
 
     Label
-      id: utilityCategory
+      id: wolfCategory
       anchors.top: holidayCard.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      margin-top: 8
+      height: 15
+      color: #f0c76a
+      font: verdana-11px-bold
+      text: [WLF] EXALTED WOLF
+
+    Panel
+      id: wolfCard
+      anchors.top: wolfCategory.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      margin-top: 3
+      height: 78
+      padding: 6
+      image-source: /images/ui/panel_flat
+      image-border: 5
+      background-color: #182126e8
+
+      Label
+        id: wolfRune
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        width: 48
+        height: 14
+        text-align: right
+        color: #344747
+        font: verdana-11px-bold
+        text: r:wlf
+
+      Label
+        id: wolfIcon
+        anchors.left: parent.left
+        anchors.top: parent.top
+        width: 30
+        height: 64
+        text-align: center
+        color: #f0c76a
+        font: verdana-11px-bold
+        text: WLF
+
+      Label
+        id: wolfTitle
+        anchors.left: wolfIcon.right
+        anchors.right: wolfBadge.left
+        anchors.top: parent.top
+        margin-left: 4
+        margin-right: 4
+        height: 16
+        color: #f0c76a
+        font: verdana-11px-bold
+        text: EXALTED WOLF
+
+      Label
+        id: wolfDesc
+        anchors.left: wolfIcon.right
+        anchors.right: wolfGear.left
+        anchors.top: wolfTitle.bottom
+        margin-left: 4
+        margin-top: 1
+        height: 14
+        color: #b6c4c7
+        font: verdana-11px
+        text: Guild, rastro e lideres
+
+      Label
+        id: wolfBadge
+        anchors.right: wolfGear.left
+        anchors.top: parent.top
+        margin-right: 4
+        width: 58
+        height: 16
+        text-align: center
+        color: #ff6f6f
+        font: verdana-11px-bold
+        text: Inativo
+
+      Button
+        id: wolfGear
+        anchors.right: parent.right
+        anchors.top: parent.top
+        width: 62
+        height: 28
+        color: #ffffff
+        background-color: #263747dd
+        text: Carregar
+
+      Panel
+        id: wolfNative
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: wolfDesc.bottom
+        margin-top: 6
+        height: 30
+        padding: 1
+        image-source: /images/ui/panel_flat
+        image-border: 5
+        background-color: #0b1114dd
+
+        Label
+          id: wolfAction
+          anchors.left: parent.left
+          anchors.right: parent.right
+          anchors.top: parent.top
+          margin-top: 2
+          height: 14
+          text-align: center
+          color: #e9f4f0
+          font: verdana-11px-bold
+          text: Clique em Carregar para ativar.
+
+        Label
+          id: wolfHint
+          anchors.left: parent.left
+          anchors.right: parent.right
+          anchors.top: wolfAction.bottom
+          height: 12
+          text-align: center
+          color: #9fb2c4
+          font: verdana-11px
+          text:
+
+    Label
+      id: utilityCategory
+      anchors.top: wolfCard.bottom
       anchors.left: parent.left
       anchors.right: parent.right
       margin-top: 8
@@ -2310,6 +2441,7 @@ jqmCreateWindow = function()
   bindModuleCard("combo")
   bindModuleCard("castle_manager")
   bindModuleCard("holiday_aoe")
+  bindModuleCard("exalted_wolf")
 
   jqmRefreshManagerUi()
   return jqmWindow

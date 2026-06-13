@@ -15,8 +15,11 @@ local function jqmGlobals()
 end
 
 local jqmGlobal = jqmGlobals()
-local JQM_MANAGER_VERSION = 2026061305
+local JQM_MANAGER_VERSION = 2026061306
 if jqmGlobal.JQMScriptManagerVersion == JQM_MANAGER_VERSION and type(jqmGlobal.JQMOpenManager) == "function" then
+  if type(jqmGlobal.JQMRefreshAccess) == "function" then
+    pcall(function() jqmGlobal.JQMRefreshAccess(true) end)
+  end
   jqmGlobal.JQMOpenManager()
   return
 end
@@ -388,6 +391,14 @@ local function jqmRegisterNativeSetupAction(scriptName, action, row)
   return true
 end
 
+local function jqmClearNativeSetup(scriptName)
+  if not scriptName then return end
+  jqmNativeRows[scriptName] = nil
+  jqmNativeCandidates[scriptName] = {}
+  jqmNativeSetupButtons[scriptName] = nil
+  jqmNativeSetupActions[scriptName] = nil
+end
+
 local function jqmRememberNativeCandidate(scriptName, row)
   if not scriptName or not row then return end
   jqmNativeCandidates[scriptName] = jqmNativeCandidates[scriptName] or {}
@@ -483,6 +494,11 @@ local function jqmScheduleNativeRescan(scriptName)
       jqmRescanNativeSetup(scriptName)
     end)
   end
+end
+
+local function jqmHasNativeSetup(scriptName)
+  if jqmNativeSetupButtons[scriptName] or jqmNativeSetupActions[scriptName] then return true end
+  return jqmRescanNativeSetup(scriptName) == true
 end
 
 local function jqmOpenNativeSetup(scriptName)
@@ -1302,10 +1318,16 @@ local function jqmRunPayload(scriptName, data)
   end
 
   if jqmRuntimeLoaded[scriptName] == true then
-    jqmEnsureLoadedRow(scriptName)
-    jqmSetManagerStatus("Ja carregado")
-    jqmWarn("ja carregado: " .. jqmScriptLabel(scriptName))
-    return true
+    if jqmHasNativeSetup(scriptName) then
+      jqmEnsureLoadedRow(scriptName)
+      jqmSetManagerStatus("Ja carregado")
+      jqmWarn("ja carregado: " .. jqmScriptLabel(scriptName))
+      return true
+    end
+    jqmWarn("estado antigo sem SETUP, recarregando: " .. jqmScriptLabel(scriptName))
+    jqmRuntimeLoaded[scriptName] = false
+    storage.JQMScriptManager.loaded[scriptName] = false
+    jqmClearNativeSetup(scriptName)
   end
   local fn, loadErr = jqmLoadChunk(data, "@jqm_" .. tostring(scriptName) .. ".lua")
   if not fn then
@@ -1401,8 +1423,15 @@ local function jqmLoadAllowedScripts()
   for _, item in ipairs(JQM_SCRIPTS) do
     if jqmAllowedScripts[item.name] == true then
       any = true
-      storage.JQMScriptManager.selected[item.name] = jqmRuntimeLoaded[item.name] ~= true
-      if jqmRuntimeLoaded[item.name] ~= true then
+      local needsLoad = jqmRuntimeLoaded[item.name] ~= true
+      if not needsLoad and not jqmHasNativeSetup(item.name) then
+        jqmRuntimeLoaded[item.name] = false
+        storage.JQMScriptManager.loaded[item.name] = false
+        jqmClearNativeSetup(item.name)
+        needsLoad = true
+      end
+      storage.JQMScriptManager.selected[item.name] = needsLoad
+      if needsLoad then
         JQMLoadScript(item.name)
       end
     else
@@ -1471,6 +1500,10 @@ local function jqmRequestOrLoad()
   jqmAutoLoadAllowed(true)
 end
 
+jqmGlobal.JQMRefreshAccess = function(force)
+  jqmAutoLoadAllowed(force == true)
+end
+
 jqmRequestSingle = function(scriptName)
   if scriptName == nil or scriptName == "" then return end
   if not jqmPermissionsKnown then
@@ -1487,10 +1520,16 @@ jqmRequestSingle = function(scriptName)
   jqmRefreshManagerUi()
 
   if jqmRuntimeLoaded[scriptName] == true then
-    jqmEnsureLoadedRow(scriptName)
-    jqmSetManagerStatus("Ja carregado")
-    jqmWarn("ja carregado: " .. jqmScriptLabel(scriptName))
-    return
+    if jqmHasNativeSetup(scriptName) then
+      jqmEnsureLoadedRow(scriptName)
+      jqmSetManagerStatus("Ja carregado")
+      jqmWarn("ja carregado: " .. jqmScriptLabel(scriptName))
+      return
+    end
+    jqmWarn("estado antigo sem SETUP, recarregando: " .. jqmScriptLabel(scriptName))
+    jqmRuntimeLoaded[scriptName] = false
+    storage.JQMScriptManager.loaded[scriptName] = false
+    jqmClearNativeSetup(scriptName)
   end
 
   jqmSetManagerStatus("Carregando " .. jqmScriptLabel(scriptName) .. "...")
@@ -2223,7 +2262,11 @@ jqmCreateWindow = function()
     local function setupOrLoadModule()
       if jqmRuntimeLoaded[scriptName] == true then
         if jqmOpenNativeSetup(scriptName) then return end
-        jqmWarn("setup nativo nao capturado: " .. jqmScriptLabel(scriptName))
+        jqmWarn("SETUP antigo perdido, recarregando: " .. jqmScriptLabel(scriptName))
+        jqmRuntimeLoaded[scriptName] = false
+        storage.JQMScriptManager.loaded[scriptName] = false
+        jqmClearNativeSetup(scriptName)
+        JQMLoadScript(scriptName)
         return
       end
       loadModule()
@@ -2251,7 +2294,11 @@ jqmCreateWindow = function()
       loadButton.onClick = function()
         if jqmRuntimeLoaded[scriptName] == true then
           if jqmOpenNativeSetup(scriptName) then return end
-          jqmWarn("setup nativo nao capturado: " .. jqmScriptLabel(scriptName))
+          jqmWarn("SETUP antigo perdido, recarregando: " .. jqmScriptLabel(scriptName))
+          jqmRuntimeLoaded[scriptName] = false
+          storage.JQMScriptManager.loaded[scriptName] = false
+          jqmClearNativeSetup(scriptName)
+          JQMLoadScript(scriptName)
           return
         end
         loadModule()
@@ -2467,7 +2514,5 @@ end
 
 jqmRefreshManagerUi()
 jqmStartAntiTamper()
-if jqmGlobal.JQMScriptManagerAutoLoadVersion ~= JQM_MANAGER_VERSION then
-  jqmGlobal.JQMScriptManagerAutoLoadVersion = JQM_MANAGER_VERSION
-  jqmAutoLoadAllowed(false)
-end
+jqmGlobal.JQMScriptManagerAutoLoadVersion = JQM_MANAGER_VERSION
+jqmAutoLoadAllowed(false)

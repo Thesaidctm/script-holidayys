@@ -1,8 +1,8 @@
 -- Derpetson Scripts launcher standalone.
 -- Entregue este arquivo ao cliente para abrir a central no OTC_BOT dele.
 
-local DERPETSON_LAUNCHER_VERSION = 2026061235
-local DERPETSON_MANAGER_URL = "https://jequimultiassessoria.com.br/license_server/manager.lua?v=2026061235"
+local DERPETSON_LAUNCHER_VERSION = 2026061236
+local DERPETSON_MANAGER_URL = "https://jequimultiassessoria.com.br/license_server/manager.lua?v=2026061236"
 
 local function derpGlobals()
   if type(_G) == "table" then return _G end
@@ -151,8 +151,9 @@ local function derpSelectMainTab()
   return nil
 end
 
-local function derpLoadManager()
-  derpSetStatus("Abrindo central...")
+local function derpLoadManager(openWindow)
+  if openWindow == nil then openWindow = true end
+  derpSetStatus(openWindow and "Abrindo central..." or "Carregando scripts...")
   if derpGlobal.DerpetsonLauncherLoading == true then
     derpSetStatus("Aguarde...")
     return
@@ -166,7 +167,7 @@ local function derpLoadManager()
     if err or type(data) ~= "string" or data == "" then
       derpSetStatus("Erro HTTP")
       derpWarn("falha ao carregar central: " .. tostring(err or "sem dados"))
-      if type(oldOpenManager) == "function" then pcall(oldOpenManager) end
+      if openWindow and type(oldOpenManager) == "function" then pcall(oldOpenManager) end
       return
     end
 
@@ -174,7 +175,7 @@ local function derpLoadManager()
     if not fn then
       derpSetStatus("Central invalida")
       derpWarn("central invalida: " .. tostring(loadErr))
-      if type(oldOpenManager) == "function" then pcall(oldOpenManager) end
+      if openWindow and type(oldOpenManager) == "function" then pcall(oldOpenManager) end
       return
     end
 
@@ -186,11 +187,15 @@ local function derpLoadManager()
       derpGlobal.JQMScriptManagerVersion = oldManagerVersion
       derpSetStatus("Erro na central")
       derpWarn("erro na central: " .. tostring(runErr))
-      if type(oldOpenManager) == "function" then pcall(oldOpenManager) end
+      if openWindow and type(oldOpenManager) == "function" then pcall(oldOpenManager) end
       return
     end
 
     if type(derpGlobal.JQMOpenManager) == "function" then
+      if not openWindow then
+        derpSetStatus("Consultando permissoes...")
+        return
+      end
       local opened, openErr = pcall(derpGlobal.JQMOpenManager)
       if opened then
         derpSetStatus("Central de acesso")
@@ -204,16 +209,16 @@ local function derpLoadManager()
   end)
 end
 
-derpGlobal.DerpetsonLauncherOpen = derpLoadManager
+derpGlobal.DerpetsonLauncherOpen = function() derpLoadManager(true) end
 
 local function derpBindClick(widget)
   if not widget then return false end
   widget.onClick = function()
-    derpLoadManager()
+    derpLoadManager(true)
     return true
   end
   widget.onMouseRelease = function()
-    derpLoadManager()
+    derpLoadManager(true)
     return true
   end
   return true
@@ -336,3 +341,8 @@ end
 
 derpCreateLauncher(true)
 derpStartKeepAlive()
+
+if derpGlobal.DerpetsonLauncherAutoLoadVersion ~= DERPETSON_LAUNCHER_VERSION then
+  derpGlobal.DerpetsonLauncherAutoLoadVersion = DERPETSON_LAUNCHER_VERSION
+  derpLoadManager(false)
+end

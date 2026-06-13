@@ -15,7 +15,7 @@ local function jqmGlobals()
 end
 
 local jqmGlobal = jqmGlobals()
-local JQM_MANAGER_VERSION = 2026061235
+local JQM_MANAGER_VERSION = 2026061236
 if jqmGlobal.JQMScriptManagerVersion == JQM_MANAGER_VERSION and type(jqmGlobal.JQMOpenManager) == "function" then
   jqmGlobal.JQMOpenManager()
   return
@@ -52,6 +52,12 @@ local JQM_CARD_PREFIX = {
   castle_manager = "castle"
 }
 
+local JQM_CATEGORY_CONTROLS = {
+  combo = "combatCategory",
+  holiday_aoe = "defenseCategory",
+  castle_manager = "castleCategory"
+}
+
 local JQM_NATIVE_TITLES = {
   combo = { "COMBO ESPART", "COMBO ESPART V3" },
   holiday_aoe = { "Holiday AOE", "HOLIDAY AOE" },
@@ -72,11 +78,15 @@ local jqmLoadedRows = {}
 local jqmNativeRows = {}
 local jqmNativeSetupButtons = {}
 local jqmNativeSetupActions = {}
+local jqmAllowedScripts = {}
+local jqmPermissionsKnown = false
+local jqmAutoLoadRunning = false
 local jqmOpenManager = nil
 local jqmCreateWindow = nil
 local jqmScriptLabel = nil
 local jqmScriptItem = nil
 local jqmWarn = nil
+local jqmAutoLoadAllowed = nil
 local jqmPrepareProxySetup = nil
 local jqmEnsureLoadedRow = nil
 local jqmCaptureNativeSetup = nil
@@ -208,6 +218,12 @@ local function jqmSetVisible(widget, visible)
     elseif widget.setVisible then
       pcall(function() widget:setVisible(true) end)
     end
+  end
+end
+
+local function jqmSetHeight(widget, height)
+  if widget and widget.setHeight then
+    pcall(function() widget:setHeight(tonumber(height) or 0) end)
   end
 end
 
@@ -420,9 +436,9 @@ jqmPrepareProxySetup = function(scriptName)
     jqmSetVisible(loadButton, false)
     jqmSetText(action, "Setup original nao capturado.")
     jqmSetText(hint, "")
-    jqmSetColor(action, "#ffd36b")
-    jqmSetColor(hint, "#ffd36b")
-    jqmSetBackground(gear, "#6f531fdd")
+    jqmSetColor(action, "#c7d2d4")
+    jqmSetColor(hint, "#9fb2c4")
+    jqmSetBackground(gear, "#263747dd")
   end
 
   if loadButton then
@@ -458,9 +474,47 @@ local function jqmSelectedCsv()
   return table.concat(jqmSelectedNames(), ",")
 end
 
+local function jqmAllScriptNamesCsv()
+  local names = {}
+  for _, item in ipairs(JQM_SCRIPTS) do
+    table.insert(names, item.name)
+  end
+  return table.concat(names, ",")
+end
+
+local function jqmAllowedCount()
+  local count = 0
+  for _, item in ipairs(JQM_SCRIPTS) do
+    if jqmAllowedScripts[item.name] == true then count = count + 1 end
+  end
+  return count
+end
+
+local function jqmScriptAllowed(scriptName)
+  return jqmPermissionsKnown == true and jqmAllowedScripts[scriptName] == true
+end
+
+local function jqmSetAllowedScripts(scriptNames)
+  jqmAllowedScripts = {}
+  for _, scriptName in ipairs(scriptNames or {}) do
+    jqmAllowedScripts[scriptName] = true
+  end
+  jqmPermissionsKnown = true
+  storage.JQMScriptManager.allowed = jqmAllowedScripts
+  for _, item in ipairs(JQM_SCRIPTS) do
+    storage.JQMScriptManager.selected[item.name] = jqmAllowedScripts[item.name] == true and jqmRuntimeLoaded[item.name] ~= true
+  end
+end
+
 local function jqmSelectedSummary()
+  if not jqmPermissionsKnown then return "Consultando permissoes..." end
+  local allowed = jqmAllowedCount()
+  if allowed == 0 then return "Nenhum script liberado" end
   local labels = jqmSelectedLabels()
-  if #labels == 0 then return "Nenhum script selecionado" end
+  if #labels == 0 then
+    if allowed == 1 then return "1 script liberado" end
+    return tostring(allowed) .. " scripts liberados"
+  end
   if #labels == 1 then return labels[1] end
   return tostring(#labels) .. " scripts selecionados"
 end
@@ -476,9 +530,11 @@ local function jqmLoadedCount()
 end
 
 local function jqmMainSummary()
+  if not jqmPermissionsKnown then return "Consultando permissoes..." end
   local count = jqmLoadedCount()
   if count == 1 then return "1 produto ativo" end
   if count > 1 then return tostring(count) .. " produtos ativos" end
+  if jqmAllowedCount() == 0 then return "Nenhum script liberado" end
   return "Selecionar scripts"
 end
 
@@ -511,10 +567,25 @@ local function jqmSetManagerStatus(text)
   jqmSetText(jqmWindowControl("status"), text)
 end
 
+local function jqmSetModuleVisible(scriptName, visible)
+  local prefix = JQM_CARD_PREFIX[scriptName]
+  local categoryId = JQM_CATEGORY_CONTROLS[scriptName]
+  if not prefix then return end
+  local card = jqmWindowControl(prefix .. "Card")
+  local category = categoryId and jqmWindowControl(categoryId) or nil
+  jqmSetVisible(card, visible)
+  jqmSetVisible(category, visible)
+  jqmSetHeight(card, visible and 78 or 0)
+  jqmSetHeight(category, visible and 15 or 0)
+end
+
 local function jqmUpdateModuleCard(item, hover)
   if not item then return end
   local prefix = JQM_CARD_PREFIX[item.name]
   if not prefix then return end
+  local allowed = jqmScriptAllowed(item.name)
+  jqmSetModuleVisible(item.name, allowed)
+  if not allowed then return end
 
   local card = jqmWindowControl(prefix .. "Card")
   local icon = jqmWindowControl(prefix .. "Icon")
@@ -578,7 +649,7 @@ local function jqmUpdateModuleCard(item, hover)
   jqmSetColor(desc, "#9fb2c4")
   jqmSetColor(gear, jqmRuntimeLoaded[item.name] == true and "#ffffff" or (hover and "#ffd36b" or "#dce4ee"))
   if jqmRuntimeLoaded[item.name] == true then
-    jqmSetBackground(gear, setupReady and "#1f6f3add" or "#6f531fdd")
+    jqmSetBackground(gear, setupReady and "#1f6f3add" or "#263747dd")
   elseif storage.JQMScriptManager.selected[item.name] == true then
     jqmSetBackground(gear, "#2b5f83dd")
   else
@@ -611,7 +682,7 @@ end
 
 local function jqmSetAllSelected(value)
   for _, item in ipairs(JQM_SCRIPTS) do
-    storage.JQMScriptManager.selected[item.name] = value == true
+    storage.JQMScriptManager.selected[item.name] = value == true and jqmScriptAllowed(item.name)
   end
   jqmRefreshManagerUi()
 end
@@ -625,9 +696,11 @@ jqmEnsureLoadedRow = function(scriptName)
   end
   local prefix = JQM_CARD_PREFIX[scriptName]
   if prefix then
-    jqmSetText(jqmWindowControl(prefix .. "Hint"), "Script carregado. Setup nativo nao exposto.")
-    jqmSetColor(jqmWindowControl(prefix .. "Hint"), "#ffd36b")
-    jqmSetText(jqmWindowControl(prefix .. "Gear"), "Setup")
+    jqmSetText(jqmWindowControl(prefix .. "Action"), "Script carregado. Setup nativo nao exposto.")
+    jqmSetText(jqmWindowControl(prefix .. "Hint"), "")
+    jqmSetColor(jqmWindowControl(prefix .. "Action"), "#c7d2d4")
+    jqmSetColor(jqmWindowControl(prefix .. "Hint"), "#9fb2c4")
+    jqmSetText(jqmWindowControl(prefix .. "Gear"), "SETUP")
   end
   return jqmNativeHost(scriptName)
 end
@@ -996,51 +1069,79 @@ local function jqmScriptsFromResponse(data)
   return scripts
 end
 
-local function jqmRequestOrLoad()
-  local scripts = jqmSelectedCsv()
-  if scripts == "" then
-    jqmSetManagerStatus("Marque pelo menos um script")
-    jqmWarn("marque pelo menos um script.")
+local function jqmLoadAllowedScripts()
+  local any = false
+  for _, item in ipairs(JQM_SCRIPTS) do
+    if jqmAllowedScripts[item.name] == true then
+      any = true
+      storage.JQMScriptManager.selected[item.name] = jqmRuntimeLoaded[item.name] ~= true
+      if jqmRuntimeLoaded[item.name] ~= true then
+        JQMLoadScript(item.name)
+      end
+    else
+      storage.JQMScriptManager.selected[item.name] = false
+    end
+  end
+  jqmRefreshManagerUi()
+  if not any then
+    jqmSetManagerStatus("Nenhum script liberado")
+  end
+end
+
+jqmAutoLoadAllowed = function(force)
+  if jqmAutoLoadRunning == true then return end
+  if jqmPermissionsKnown == true and force ~= true then
+    jqmLoadAllowedScripts()
     return
   end
-  jqmSetManagerStatus("Conectando ao servidor...")
-  jqmHttpGet(jqmBuildUrl("request", { scripts = scripts }), function(data, err)
+  jqmAutoLoadRunning = true
+  jqmSetManagerStatus("Consultando permissoes...")
+
+  jqmHttpGet(jqmBuildUrl("request", { scripts = jqmAllScriptNamesCsv() }), function(data, err)
+    jqmAutoLoadRunning = false
     if err or not data then
-      jqmSetManagerStatus("Aguardando liberacao")
-      jqmWarn(JQM_PENDING_MESSAGE)
+      jqmSetManagerStatus("Falha ao consultar permissoes")
+      jqmWarn("falha ao consultar permissoes: " .. tostring(err or "sem dados"))
       return
     end
 
     if data:find('"ok":true', 1, true) or data:find('"ok": true', 1, true) then
       local allowed = jqmScriptsFromResponse(data)
+      jqmSetAllowedScripts(allowed)
+      jqmRefreshManagerUi()
       if #allowed == 0 then
-        local selected = jqmSelectedNames()
-        if #selected > 0 then
-          jqmSetManagerStatus("Tentando baixar selecionados...")
-          for _, scriptName in ipairs(selected) do
-            JQMLoadScript(scriptName)
-          end
-          return
-        end
-        jqmSetManagerStatus("Nenhum selecionado liberado")
+        jqmSetManagerStatus("Nenhum script liberado")
         jqmWarn("nenhum script liberado para este MAC.")
         return
       end
-      jqmSetManagerStatus("Carregando selecionados...")
-      jqmWarn("liberado. carregando scripts.")
-      for _, scriptName in ipairs(allowed) do
-        JQMLoadScript(scriptName)
-      end
+      jqmSetManagerStatus("Carregando liberados...")
+      jqmLoadAllowedScripts()
       return
     end
 
+    jqmSetAllowedScripts({})
+    jqmRefreshManagerUi()
     jqmSetManagerStatus("Aguardando liberacao")
     jqmWarn(JQM_PENDING_MESSAGE)
   end)
 end
 
+local function jqmRequestOrLoad()
+  jqmAutoLoadAllowed(true)
+end
+
 jqmRequestSingle = function(scriptName)
   if scriptName == nil or scriptName == "" then return end
+  if not jqmPermissionsKnown then
+    jqmAutoLoadAllowed(true)
+    return
+  end
+  if not jqmScriptAllowed(scriptName) then
+    jqmSetManagerStatus("Sem liberacao para " .. jqmScriptLabel(scriptName))
+    jqmWarn("script ainda nao liberado para este MAC.")
+    jqmRefreshManagerUi()
+    return
+  end
   storage.JQMScriptManager.selected[scriptName] = true
   jqmRefreshManagerUi()
 
@@ -1052,33 +1153,7 @@ jqmRequestSingle = function(scriptName)
   end
 
   jqmSetManagerStatus("Carregando " .. jqmScriptLabel(scriptName) .. "...")
-  jqmHttpGet(jqmBuildUrl("request", { scripts = scriptName }), function(data, err)
-    if err or not data then
-      jqmSetManagerStatus("Aguardando liberacao")
-      jqmWarn(JQM_PENDING_MESSAGE)
-      return
-    end
-
-    if data:find('"ok":true', 1, true) or data:find('"ok": true', 1, true) then
-      local allowed = jqmScriptsFromResponse(data)
-      if #allowed == 0 then
-        JQMLoadScript(scriptName)
-        return
-      end
-      for _, allowedName in ipairs(allowed) do
-        if allowedName == scriptName then
-          JQMLoadScript(scriptName)
-          return
-        end
-      end
-      jqmSetManagerStatus("Sem liberacao para " .. jqmScriptLabel(scriptName))
-      jqmWarn("script ainda nao liberado para este MAC.")
-      return
-    end
-
-    jqmSetManagerStatus("Aguardando liberacao")
-    jqmWarn(JQM_PENDING_MESSAGE)
-  end)
+  JQMLoadScript(scriptName)
 end
 
 local function jqmLoadManagerUi()
@@ -2047,4 +2122,10 @@ elseif UI and UI.Button then
   jqmGlobal.JQMScriptManagerBridgeLauncher = button
   jqmGlobal.JQMScriptManagerLauncher = button
   jqmCleanupDuplicateLaunchers(button)
+end
+
+jqmRefreshManagerUi()
+if jqmGlobal.JQMScriptManagerAutoLoadVersion ~= JQM_MANAGER_VERSION then
+  jqmGlobal.JQMScriptManagerAutoLoadVersion = JQM_MANAGER_VERSION
+  jqmAutoLoadAllowed(false)
 end

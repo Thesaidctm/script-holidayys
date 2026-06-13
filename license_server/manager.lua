@@ -15,7 +15,7 @@ local function jqmGlobals()
 end
 
 local jqmGlobal = jqmGlobals()
-local JQM_MANAGER_VERSION = 2026061301
+local JQM_MANAGER_VERSION = 2026061302
 if jqmGlobal.JQMScriptManagerVersion == JQM_MANAGER_VERSION and type(jqmGlobal.JQMOpenManager) == "function" then
   jqmGlobal.JQMOpenManager()
   return
@@ -284,6 +284,21 @@ local function jqmDirectSetupButton(widget)
   return nil
 end
 
+local function jqmWidgetLooksClickable(widget)
+  if not widget then return false end
+  return type(widget.onClick) == "function" or type(widget.onMouseRelease) == "function" or type(widget.onMousePress) == "function"
+end
+
+local function jqmTextLooksSetup(text)
+  text = tostring(text or ""):lower()
+  if text == "" then return false end
+  return text:find("setup", 1, true) ~= nil
+    or text:find("cfg", 1, true) ~= nil
+    or text:find("config", 1, true) ~= nil
+    or text:find("painel", 1, true) ~= nil
+    or text:find("abrir", 1, true) ~= nil
+end
+
 local function jqmFindSetupButton(widget)
   if not widget then return nil end
   local direct = jqmDirectSetupButton(widget)
@@ -292,7 +307,18 @@ local function jqmFindSetupButton(widget)
     local child = jqmChild(widget, id)
     if child then return child end
   end
-  return nil
+  local function scan(current, depth)
+    if not current or depth <= 0 then return nil end
+    if current ~= jqmLauncher and jqmWidgetLooksClickable(current) and jqmTextLooksSetup(jqmGetText(current)) then
+      return current
+    end
+    for _, child in ipairs(jqmChildren(current)) do
+      local found = scan(child, depth - 1)
+      if found then return found end
+    end
+    return nil
+  end
+  return scan(widget, 8)
 end
 
 local function jqmWidgetTreeHasText(widget, texts, depth)
@@ -363,7 +389,7 @@ jqmCaptureNativeSetup = function(scriptName, row, className)
   if not scriptName or not row then return false end
   local button = jqmFindSetupButton(row)
   if not button then return false end
-  if not jqmNativeHostContains(scriptName, row) and not jqmNativeClassMatches(scriptName, className) then return false end
+  if not jqmNativeHostContains(scriptName, row) and not jqmNativeClassMatches(scriptName, className) and not jqmNativeWidgetMatches(scriptName, row, className) then return false end
 
   jqmNativeRows[scriptName] = row
   jqmNativeSetupButtons[scriptName] = button
@@ -377,7 +403,7 @@ local function jqmFindExistingNativeRow(scriptName)
 
   local function scan(widget, depth)
     if not widget or depth <= 0 then return nil end
-    if widget ~= jqmLauncher and jqmDirectSetupButton(widget) and jqmNativeHostContains(scriptName, widget) then
+    if widget ~= jqmLauncher and jqmFindSetupButton(widget) and jqmNativeHostContains(scriptName, widget) then
       return widget
     end
     for _, child in ipairs(jqmChildren(widget)) do
@@ -409,6 +435,14 @@ local function jqmOpenNativeSetup(scriptName)
   local button = jqmNativeSetupButtons[scriptName]
   if button and type(button.onClick) == "function" then
     pcall(function() button.onClick(button) end)
+    return true
+  end
+  if button and type(button.onMouseRelease) == "function" then
+    pcall(function() button.onMouseRelease(button) end)
+    return true
+  end
+  if button and type(button.onMousePress) == "function" then
+    pcall(function() button.onMousePress(button) end)
     return true
   end
   return false
@@ -857,21 +891,50 @@ local function jqmHttpGet(url, callback)
   if modules and modules.corelib and type(modules.corelib.HTTP) == "table" then table.insert(httpCandidates, modules.corelib.HTTP) end
   if modules and modules._G and type(modules._G.HTTP) == "table" then table.insert(httpCandidates, modules._G.HTTP) end
 
-  for _, http in ipairs(httpCandidates) do
+  local function tryCandidate(index)
+    if called then return true end
+    local http = httpCandidates[index]
+    if not http then
+      done(nil, "HTTP.get/g_http.get indisponivel")
+      return false
+    end
     if type(http) == "table" and type(http.get) == "function" then
-      local ok = pcall(function()
+      local ok, response = pcall(function()
         local response = http.get(url, function(a, b, c)
           local data, err = jqmNormalizeHttp(a, b, c)
           done(data, err)
         end)
-        if type(response) == "string" then done(response, nil) end
+        return response
       end)
-      if ok then return true end
+      if ok then
+        if type(response) == "string" then
+          done(response, nil)
+          return true
+        end
+        if type(response) == "table" then
+          local data, err = jqmNormalizeHttp(response)
+          if data then
+            done(data, err)
+            return true
+          end
+        end
+        if type(schedule) == "function" then
+          schedule(8000, function()
+            if not called then
+              tryCandidate(index + 1)
+            end
+          end)
+        else
+          return tryCandidate(index + 1)
+        end
+        return true
+      end
     end
+
+    return tryCandidate(index + 1)
   end
 
-  done(nil, "HTTP.get/g_http.get indisponivel")
-  return false
+  return tryCandidate(1)
 end
 
 local function jqmBaseParams(action, extra)
@@ -1023,7 +1086,7 @@ local function jqmRunInManagerTab(scriptName, fn)
   local function forcedCreateWidget(originalCreateWidget)
     return function(className, targetParent, ...)
       local finalParent = targetParent
-      if finalParent == nil and jqmNativeClassMatches(scriptName, className) then
+      if finalParent == nil then
         finalParent = nativeHost or parent
       end
       local widget = originalCreateWidget(className, finalParent, ...)
@@ -1268,9 +1331,17 @@ jqmAutoLoadAllowed = function(force)
   jqmAutoLoadRunning = true
   jqmSetManagerStatus("Consultando permissoes...")
 
-  jqmHttpGet(jqmBuildUrl("handshake", { scripts = jqmAllScriptNamesCsv() }), function(data, err)
+  local function handlePermissionsResponse(data, err, usedFallback)
     jqmAutoLoadRunning = false
     if err or not data then
+      if not usedFallback then
+        jqmAutoLoadRunning = true
+        jqmSetManagerStatus("Tentando modo compativel...")
+        jqmHttpGet(jqmBuildUrl("request", { scripts = jqmAllScriptNamesCsv() }), function(fallbackData, fallbackErr)
+          handlePermissionsResponse(fallbackData, fallbackErr, true)
+        end)
+        return
+      end
       jqmSetManagerStatus("Falha ao consultar permissoes")
       jqmWarn("falha ao consultar permissoes: " .. tostring(err or "sem dados"))
       return
@@ -1296,6 +1367,10 @@ jqmAutoLoadAllowed = function(force)
     jqmRefreshManagerUi()
     jqmSetManagerStatus("Aguardando liberacao")
     jqmWarn(JQM_PENDING_MESSAGE)
+  end
+
+  jqmHttpGet(jqmBuildUrl("handshake", { scripts = jqmAllScriptNamesCsv() }), function(data, err)
+    handlePermissionsResponse(data, err, false)
   end)
 end
 

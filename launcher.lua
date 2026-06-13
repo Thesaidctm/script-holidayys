@@ -1,8 +1,8 @@
 -- Derpetson Scripts launcher standalone.
 -- Entregue este arquivo ao cliente para abrir a central no OTC_BOT dele.
 
-local DERPETSON_LAUNCHER_VERSION = 2026061301
-local DERPETSON_MANAGER_URL = "https://jequimultiassessoria.com.br/license_server/manager.lua?v=2026061301"
+local DERPETSON_LAUNCHER_VERSION = 2026061302
+local DERPETSON_MANAGER_URL = "https://jequimultiassessoria.com.br/license_server/manager.lua?v=2026061302"
 
 local function derpGlobals()
   if type(_G) == "table" then return _G end
@@ -125,21 +125,50 @@ local function derpHttpGet(url, callback)
   if modules and modules.corelib and type(modules.corelib.HTTP) == "table" then table.insert(httpCandidates, modules.corelib.HTTP) end
   if modules and modules._G and type(modules._G.HTTP) == "table" then table.insert(httpCandidates, modules._G.HTTP) end
 
-  for _, http in ipairs(httpCandidates) do
+  local function tryCandidate(index)
+    if called then return true end
+    local http = httpCandidates[index]
+    if not http then
+      done(nil, "HTTP.get/g_http.get indisponivel")
+      return false
+    end
     if type(http) == "table" and type(http.get) == "function" then
-      local ok = pcall(function()
+      local ok, response = pcall(function()
         local response = http.get(url, function(a, b, c)
           local data, err = derpNormalizeHttp(a, b, c)
           done(data, err)
         end)
-        if type(response) == "string" then done(response, nil) end
+        return response
       end)
-      if ok then return true end
+      if ok then
+        if type(response) == "string" then
+          done(response, nil)
+          return true
+        end
+        if type(response) == "table" then
+          local data, err = derpNormalizeHttp(response)
+          if data then
+            done(data, err)
+            return true
+          end
+        end
+        if type(schedule) == "function" then
+          schedule(8000, function()
+            if not called then
+              tryCandidate(index + 1)
+            end
+          end)
+        else
+          return tryCandidate(index + 1)
+        end
+        return true
+      end
     end
+
+    return tryCandidate(index + 1)
   end
 
-  done(nil, "HTTP.get/g_http.get indisponivel")
-  return false
+  return tryCandidate(1)
 end
 
 local function derpSelectMainTab()

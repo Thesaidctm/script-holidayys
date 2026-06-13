@@ -1,8 +1,8 @@
 -- Derpetson Scripts launcher standalone.
 -- Entregue este arquivo ao cliente para abrir a central no OTC_BOT dele.
 
-local DERPETSON_LAUNCHER_VERSION = 2026061303
-local DERPETSON_MANAGER_URL = "https://jequimultiassessoria.com.br/license_server/manager.lua?v=2026061303"
+local DERPETSON_LAUNCHER_VERSION = 2026061304
+local DERPETSON_MANAGER_URL = "https://jequimultiassessoria.com.br/license_server/manager.lua?v=2026061304"
 
 local function derpGlobals()
   if type(_G) == "table" then return _G end
@@ -99,14 +99,26 @@ local function derpLoadChunk(source, chunkName)
   return nil, lastErr or "loadstring/load indisponivel"
 end
 
+local function derpLooksLikeUrl(value)
+  return type(value) == "string" and value:lower():find("^https?://") ~= nil
+end
+
 local function derpNormalizeHttp(a, b, c)
-  if type(a) == "string" and #a > 0 then return a, nil end
-  if type(b) == "string" and #b > 0 then return b, nil end
-  if type(c) == "string" and #c > 0 then return c, nil end
-  if type(a) == "table" then
-    if type(a.body) == "string" then return a.body, nil end
-    if type(a.data) == "string" then return a.data, nil end
-    if type(a.response) == "string" then return a.response, nil end
+  local values = { a, b, c }
+  for _, value in ipairs(values) do
+    if type(value) == "string" and #value > 0 and not derpLooksLikeUrl(value) then
+      return value, nil
+    end
+  end
+  for _, value in ipairs(values) do
+    if type(value) == "table" then
+      if type(value.body) == "string" then return value.body, nil end
+      if type(value.data) == "string" then return value.data, nil end
+      if type(value.response) == "string" then return value.response, nil end
+    end
+  end
+  for _, value in ipairs(values) do
+    if type(value) == "string" and #value > 0 then return value, nil end
   end
   return nil, tostring(b or c or a or "sem resposta HTTP")
 end

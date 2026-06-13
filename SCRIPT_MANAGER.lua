@@ -15,7 +15,7 @@ local function jqmGlobals()
 end
 
 local jqmGlobal = jqmGlobals()
-local JQM_MANAGER_VERSION = 2026061303
+local JQM_MANAGER_VERSION = 2026061304
 if jqmGlobal.JQMScriptManagerVersion == JQM_MANAGER_VERSION and type(jqmGlobal.JQMOpenManager) == "function" then
   jqmGlobal.JQMOpenManager()
   return
@@ -870,14 +870,26 @@ local function jqmMachineId()
   return "unknown"
 end
 
+local function jqmLooksLikeUrl(value)
+  return type(value) == "string" and value:lower():find("^https?://") ~= nil
+end
+
 local function jqmNormalizeHttp(a, b, c)
-  if type(a) == "string" and #a > 0 then return a, nil end
-  if type(b) == "string" and #b > 0 then return b, nil end
-  if type(c) == "string" and #c > 0 then return c, nil end
-  if type(a) == "table" then
-    if type(a.body) == "string" then return a.body, nil end
-    if type(a.data) == "string" then return a.data, nil end
-    if type(a.response) == "string" then return a.response, nil end
+  local values = { a, b, c }
+  for _, value in ipairs(values) do
+    if type(value) == "string" and #value > 0 and not jqmLooksLikeUrl(value) then
+      return value, nil
+    end
+  end
+  for _, value in ipairs(values) do
+    if type(value) == "table" then
+      if type(value.body) == "string" then return value.body, nil end
+      if type(value.data) == "string" then return value.data, nil end
+      if type(value.response) == "string" then return value.response, nil end
+    end
+  end
+  for _, value in ipairs(values) do
+    if type(value) == "string" and #value > 0 then return value, nil end
   end
   return nil, tostring(b or c or a or "sem resposta HTTP")
 end

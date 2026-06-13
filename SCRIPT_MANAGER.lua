@@ -15,7 +15,7 @@ local function jqmGlobals()
 end
 
 local jqmGlobal = jqmGlobals()
-local JQM_MANAGER_VERSION = 2026061228
+local JQM_MANAGER_VERSION = 2026061230
 if jqmGlobal.JQMScriptManagerVersion == JQM_MANAGER_VERSION and type(jqmGlobal.JQMOpenManager) == "function" then
   jqmGlobal.JQMOpenManager()
   return
@@ -53,7 +53,7 @@ local JQM_CARD_PREFIX = {
 }
 
 local JQM_NATIVE_TITLES = {
-  combo = { "Combo System", "SMART PVP", "COMBO ESPART", "COMBO ESPART V3" },
+  combo = { "Combo System", "SMART PVP", "PvP Scripts 3", "PvPScripts", "COMBO ESPART", "COMBO ESPART V3" },
   holiday_aoe = { "Holiday AOE", "HOLIDAY AOE" },
   castle_manager = { "Castle Manager", "CASTLE PRO", "Castle_Manager" }
 }
@@ -213,7 +213,7 @@ local function jqmMarkNativeReady(scriptName, row, className)
   local prefix = JQM_CARD_PREFIX[scriptName]
   if prefix then
     if captured and jqmNativeSetupButtons[scriptName] then
-      jqmSetText(jqmWindowControl(prefix .. "Gear"), "CFG")
+      jqmSetText(jqmWindowControl(prefix .. "Gear"), "Setup")
       if type(jqmPrepareProxySetup) == "function" then
         jqmPrepareProxySetup(scriptName)
       else
@@ -344,7 +344,7 @@ jqmPrepareProxySetup = function(scriptName)
 
   local loadButton = jqmWindowControl(prefix .. "Load")
   local hint = jqmWindowControl(prefix .. "Hint")
-  jqmSetText(jqmWindowControl(prefix .. "Gear"), "CFG")
+  jqmSetText(jqmWindowControl(prefix .. "Gear"), "Setup")
   jqmSetVisible(loadButton, true)
   jqmSetVisible(hint, true)
   if not jqmNativeSetupButtons[scriptName] then
@@ -352,12 +352,12 @@ jqmPrepareProxySetup = function(scriptName)
   end
 
   if jqmNativeSetupButtons[scriptName] then
-    jqmSetText(loadButton, "Abrir Setup " .. (item.short or item.label))
-    jqmSetText(hint, "Setup original capturado dentro da central.")
+    jqmSetText(loadButton, "Abrir configuracao")
+    jqmSetText(hint, "Setup original capturado.")
     jqmSetColor(hint, "#7ee8a8")
   else
-    jqmSetText(loadButton, "Setup nao capturado")
-    jqmSetText(hint, "Reinicie o bot e carregue este modulo pela central.")
+    jqmSetText(loadButton, "Procurando setup")
+    jqmSetText(hint, "Carregado. Aguarde o setup aparecer.")
     jqmSetColor(hint, "#ffd36b")
   end
 
@@ -437,7 +437,7 @@ local function jqmModuleStatus(scriptName)
     return "Ativo", "#76ff9f", "#183820dd", "#dfffeb"
   end
   if storage.JQMScriptManager.selected[scriptName] == true then
-    return "Pausado", "#ffd36b", "#2d2617dd", "#ffe6a3"
+    return "Marcado", "#ffd36b", "#2d2617dd", "#ffe6a3"
   end
   return "Inativo", "#ff6f6f", "#171b22dd", "#cfd8e3"
 end
@@ -458,6 +458,7 @@ local function jqmUpdateModuleCard(item, hover)
   local desc = jqmWindowControl(prefix .. "Desc")
   local badge = jqmWindowControl(prefix .. "Badge")
   local gear = jqmWindowControl(prefix .. "Gear")
+  local loadButton = jqmWindowControl(prefix .. "Load")
   local statusText, statusColor, bgColor, titleColor = jqmModuleStatus(item.name)
 
   if hover == true then
@@ -467,8 +468,22 @@ local function jqmUpdateModuleCard(item, hover)
 
   jqmSetText(icon, item.icon or "")
   jqmSetText(title, item.label)
-  jqmSetText(desc, item.file or item.desc or "")
+  jqmSetText(desc, item.desc or item.file or "")
   jqmSetText(badge, statusText)
+  if jqmRuntimeLoaded[item.name] == true then
+    jqmSetText(gear, "Setup")
+    if jqmNativeSetupButtons[item.name] then
+      jqmSetText(loadButton, "Abrir configuracao")
+    else
+      jqmSetText(loadButton, "Procurando setup")
+    end
+  elseif storage.JQMScriptManager.selected[item.name] == true then
+    jqmSetText(gear, "Carregar")
+    jqmSetText(loadButton, "Carregar agora")
+  else
+    jqmSetText(gear, "Carregar")
+    jqmSetText(loadButton, "Carregar modulo")
+  end
   jqmSetColor(badge, statusColor)
   jqmSetColor(title, titleColor)
   jqmSetColor(icon, statusColor)
@@ -517,7 +532,7 @@ jqmEnsureLoadedRow = function(scriptName)
   if prefix then
     jqmSetText(jqmWindowControl(prefix .. "Hint"), "Script carregado. Setup nativo nao exposto.")
     jqmSetColor(jqmWindowControl(prefix .. "Hint"), "#ffd36b")
-    jqmSetText(jqmWindowControl(prefix .. "Gear"), "CFG")
+    jqmSetText(jqmWindowControl(prefix .. "Gear"), "Setup")
   end
   return jqmNativeHost(scriptName)
 end
@@ -945,12 +960,12 @@ local function jqmLoadManagerUi()
   local ok = pcall(function()
     g_ui.loadUIFromString([[
 DerpetsonScriptHubPanel < Panel
-  height: 66
+  height: 56
   margin-top: 4
   padding: 5
   image-source: /images/ui/panel_flat
   image-border: 5
-  background-color: #111820dd
+  background-color: #10161ddd
 
   Label
     id: title
@@ -962,7 +977,7 @@ DerpetsonScriptHubPanel < Panel
     text-align: left
     color: #ffd36b
     font: verdana-11px-bold
-    text: DERPETSON
+    text: Derpetson Scripts
 
   Label
     id: subtitle
@@ -975,7 +990,7 @@ DerpetsonScriptHubPanel < Panel
     text-align: left
     color: #dce4ee
     font: verdana-11px
-    text: scripts premium
+    text: Central de acesso
 
   Label
     id: status
@@ -995,13 +1010,13 @@ DerpetsonScriptHubPanel < Panel
     anchors.top: parent.top
     anchors.right: parent.right
     width: 50
-    height: 54
+    height: 44
     text-align: center
     text: Abrir
 
 DerpetsonScriptsWindow < MainWindow
   text: Derpetson Scripts
-  size: 500 635
+  size: 470 560
   padding: 10
   @onEscape: self:hide()
 
@@ -1014,7 +1029,7 @@ DerpetsonScriptsWindow < MainWindow
     image-source: /images/ui/panel_flat
     image-border: 5
     padding: 7
-    background-color: #111820ee
+    background-color: #10161dee
 
     Label
       id: title
@@ -1037,7 +1052,7 @@ DerpetsonScriptsWindow < MainWindow
       text-align: center
       color: #e8edf4
       font: verdana-11px
-      text: Addon premium para modulos liberados
+      text: Central simples para scripts liberados
 
     Label
       id: status
@@ -1057,11 +1072,11 @@ DerpetsonScriptsWindow < MainWindow
     anchors.left: parent.left
     anchors.right: parent.right
     margin-top: 9
-    height: 455
+    height: 380
     image-source: /images/ui/panel_flat
     image-border: 5
     padding: 7
-    background-color: #0f141bdd
+    background-color: #10151bdd
 
     Label
       id: combatCategory
@@ -1079,7 +1094,7 @@ DerpetsonScriptsWindow < MainWindow
       anchors.left: parent.left
       anchors.right: parent.right
       margin-top: 3
-      height: 110
+      height: 82
       padding: 5
       image-source: /images/ui/panel_flat
       image-border: 5
@@ -1090,7 +1105,7 @@ DerpetsonScriptsWindow < MainWindow
         anchors.left: parent.left
         anchors.top: parent.top
         width: 28
-        height: 98
+        height: 70
         text-align: center
         color: #ffd36b
         font: verdana-11px-bold
@@ -1118,14 +1133,14 @@ DerpetsonScriptsWindow < MainWindow
         height: 14
         color: #9fb2c4
         font: verdana-11px
-        text: COMBO_ESPART_V3.lua
+        text: Combo, runas e prioridades
 
       Label
         id: comboBadge
         anchors.right: comboGear.left
         anchors.top: parent.top
         margin-right: 4
-        width: 48
+        width: 58
         height: 16
         text-align: center
         color: #ff6f6f
@@ -1136,9 +1151,9 @@ DerpetsonScriptsWindow < MainWindow
         id: comboGear
         anchors.right: parent.right
         anchors.top: parent.top
-        width: 30
-        height: 32
-        text: CFG
+        width: 58
+        height: 28
+        text: Carregar
 
       Panel
         id: comboNative
@@ -1146,7 +1161,7 @@ DerpetsonScriptsWindow < MainWindow
         anchors.right: parent.right
         anchors.top: comboDesc.bottom
         margin-top: 6
-        height: 60
+        height: 38
         padding: 1
         image-source: /images/ui/panel_flat
         image-border: 5
@@ -1157,21 +1172,21 @@ DerpetsonScriptsWindow < MainWindow
           anchors.left: parent.left
           anchors.right: parent.right
           anchors.top: parent.top
-          margin: 4
-          height: 28
-          text: Iniciar COMBO ESPART
+          margin: 3
+          height: 20
+          text: Carregar modulo
 
         Label
           id: comboHint
           anchors.left: parent.left
           anchors.right: parent.right
           anchors.top: comboLoad.bottom
-          margin-top: 2
-          height: 16
+          margin-top: 1
+          height: 12
           text-align: center
           color: #9fb2c4
           font: verdana-11px
-          text: depois o Setup original aparece aqui
+          text: Setup aparece apos carregar
 
     Label
       id: castleCategory
@@ -1190,7 +1205,7 @@ DerpetsonScriptsWindow < MainWindow
       anchors.left: parent.left
       anchors.right: parent.right
       margin-top: 3
-      height: 110
+      height: 82
       padding: 5
       image-source: /images/ui/panel_flat
       image-border: 5
@@ -1201,7 +1216,7 @@ DerpetsonScriptsWindow < MainWindow
         anchors.left: parent.left
         anchors.top: parent.top
         width: 28
-        height: 98
+        height: 70
         text-align: center
         color: #ffd36b
         font: verdana-11px-bold
@@ -1229,14 +1244,14 @@ DerpetsonScriptsWindow < MainWindow
         height: 14
         color: #9fb2c4
         font: verdana-11px
-        text: CASTLE_MANAGER_LOGOUT.lua
+        text: Castle, seguranca e logout
 
       Label
         id: castleBadge
         anchors.right: castleGear.left
         anchors.top: parent.top
         margin-right: 4
-        width: 48
+        width: 58
         height: 16
         text-align: center
         color: #ff6f6f
@@ -1247,9 +1262,9 @@ DerpetsonScriptsWindow < MainWindow
         id: castleGear
         anchors.right: parent.right
         anchors.top: parent.top
-        width: 30
-        height: 32
-        text: CFG
+        width: 58
+        height: 28
+        text: Carregar
 
       Panel
         id: castleNative
@@ -1257,7 +1272,7 @@ DerpetsonScriptsWindow < MainWindow
         anchors.right: parent.right
         anchors.top: castleDesc.bottom
         margin-top: 6
-        height: 60
+        height: 38
         padding: 1
         image-source: /images/ui/panel_flat
         image-border: 5
@@ -1268,21 +1283,21 @@ DerpetsonScriptsWindow < MainWindow
           anchors.left: parent.left
           anchors.right: parent.right
           anchors.top: parent.top
-          margin: 4
-          height: 28
-          text: Iniciar CASTLE PRO
+          margin: 3
+          height: 20
+          text: Carregar modulo
 
         Label
           id: castleHint
           anchors.left: parent.left
           anchors.right: parent.right
           anchors.top: castleLoad.bottom
-          margin-top: 2
-          height: 16
+          margin-top: 1
+          height: 12
           text-align: center
           color: #9fb2c4
           font: verdana-11px
-          text: depois o Setup original aparece aqui
+          text: Setup aparece apos carregar
 
     Label
       id: defenseCategory
@@ -1301,7 +1316,7 @@ DerpetsonScriptsWindow < MainWindow
       anchors.left: parent.left
       anchors.right: parent.right
       margin-top: 3
-      height: 110
+      height: 82
       padding: 5
       image-source: /images/ui/panel_flat
       image-border: 5
@@ -1312,7 +1327,7 @@ DerpetsonScriptsWindow < MainWindow
         anchors.left: parent.left
         anchors.top: parent.top
         width: 28
-        height: 98
+        height: 70
         text-align: center
         color: #ffd36b
         font: verdana-11px-bold
@@ -1340,14 +1355,14 @@ DerpetsonScriptsWindow < MainWindow
         height: 14
         color: #9fb2c4
         font: verdana-11px
-        text: holiday_aoe.lua
+        text: Area, combo e PvP
 
       Label
         id: holidayBadge
         anchors.right: holidayGear.left
         anchors.top: parent.top
         margin-right: 4
-        width: 48
+        width: 58
         height: 16
         text-align: center
         color: #ff6f6f
@@ -1358,9 +1373,9 @@ DerpetsonScriptsWindow < MainWindow
         id: holidayGear
         anchors.right: parent.right
         anchors.top: parent.top
-        width: 30
-        height: 32
-        text: CFG
+        width: 58
+        height: 28
+        text: Carregar
 
       Panel
         id: holidayNative
@@ -1368,7 +1383,7 @@ DerpetsonScriptsWindow < MainWindow
         anchors.right: parent.right
         anchors.top: holidayDesc.bottom
         margin-top: 6
-        height: 60
+        height: 38
         padding: 1
         image-source: /images/ui/panel_flat
         image-border: 5
@@ -1379,21 +1394,21 @@ DerpetsonScriptsWindow < MainWindow
           anchors.left: parent.left
           anchors.right: parent.right
           anchors.top: parent.top
-          margin: 4
-          height: 28
-          text: Iniciar HOLIDAY AOE
+          margin: 3
+          height: 20
+          text: Carregar modulo
 
         Label
           id: holidayHint
           anchors.left: parent.left
           anchors.right: parent.right
           anchors.top: holidayLoad.bottom
-          margin-top: 2
-          height: 16
+          margin-top: 1
+          height: 12
           text-align: center
           color: #9fb2c4
           font: verdana-11px
-          text: depois o Setup original aparece aqui
+          text: Setup aparece apos carregar
 
     Label
       id: utilityCategory
@@ -1494,7 +1509,7 @@ DerpetsonScriptsWindow < MainWindow
       text-align: center
       color: #dce4ee
       font: verdana-11px
-      text: Ativo / Pausado / Inativo
+      text: Ativo / Marcado / Inativo
 
   Panel
     id: footer

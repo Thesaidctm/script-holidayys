@@ -15,7 +15,7 @@ local function jqmGlobals()
 end
 
 local jqmGlobal = jqmGlobals()
-local JQM_MANAGER_VERSION = 2026061231
+local JQM_MANAGER_VERSION = 2026061232
 if jqmGlobal.JQMScriptManagerVersion == JQM_MANAGER_VERSION and type(jqmGlobal.JQMOpenManager) == "function" then
   jqmGlobal.JQMOpenManager()
   return
@@ -1698,6 +1698,14 @@ local function jqmBindClick(widget, fn)
   return true
 end
 
+local function jqmOpenFromLauncher()
+  if type(jqmGlobal.DerpetsonLauncherOpen) == "function" then
+    jqmGlobal.DerpetsonLauncherOpen()
+    return
+  end
+  jqmOpenManager()
+end
+
 local function jqmCleanupDuplicateLaunchers(keep)
   local tab = jqmEnsureManagerTab()
   if not tab or not tab.getChildren then return end
@@ -1727,11 +1735,11 @@ local function jqmUseExternalLauncher()
   jqmLauncher = external
   jqmGlobal.JQMScriptManagerLauncher = external
   jqmCleanupDuplicateLaunchers(external)
-  jqmBindClick(jqmChild(jqmLauncher, "open") or jqmChild(jqmLauncher, "openButton"), jqmOpenManager)
-  jqmBindClick(jqmChild(jqmLauncher, "title"), jqmOpenManager)
-  jqmBindClick(jqmChild(jqmLauncher, "subtitle"), jqmOpenManager)
-  jqmBindClick(jqmChild(jqmLauncher, "status"), jqmOpenManager)
-  jqmBindClick(jqmLauncher, jqmOpenManager)
+  jqmBindClick(jqmChild(jqmLauncher, "open") or jqmChild(jqmLauncher, "openButton"), jqmOpenFromLauncher)
+  jqmBindClick(jqmChild(jqmLauncher, "title"), jqmOpenFromLauncher)
+  jqmBindClick(jqmChild(jqmLauncher, "subtitle"), jqmOpenFromLauncher)
+  jqmBindClick(jqmChild(jqmLauncher, "status"), jqmOpenFromLauncher)
+  jqmBindClick(jqmLauncher, jqmOpenFromLauncher)
   jqmRefreshManagerUi()
   return true
 end

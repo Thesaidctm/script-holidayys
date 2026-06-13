@@ -1,8 +1,8 @@
 -- Derpetson Scripts launcher standalone.
 -- Entregue este arquivo ao cliente para abrir a central no OTC_BOT dele.
 
-local DERPETSON_LAUNCHER_VERSION = 2026061231
-local DERPETSON_MANAGER_URL = "https://jequimultiassessoria.com.br/license_server/manager.lua?v=2026061231"
+local DERPETSON_LAUNCHER_VERSION = 2026061232
+local DERPETSON_MANAGER_URL = "https://jequimultiassessoria.com.br/license_server/manager.lua?v=2026061232"
 
 local function derpGlobals()
   if type(_G) == "table" then return _G end
@@ -153,22 +153,20 @@ end
 
 local function derpLoadManager()
   derpSetStatus("Abrindo central...")
-  if type(derpGlobal.JQMOpenManager) == "function" then
-    derpGlobal.JQMOpenManager()
-    derpSetStatus("Central de acesso")
-    return
-  end
   if derpGlobal.DerpetsonLauncherLoading == true then
     derpSetStatus("Aguarde...")
     return
   end
   derpGlobal.DerpetsonLauncherLoading = true
+  local oldOpenManager = derpGlobal.JQMOpenManager
+  local oldManagerVersion = derpGlobal.JQMScriptManagerVersion
 
   derpHttpGet(DERPETSON_MANAGER_URL, function(data, err)
     derpGlobal.DerpetsonLauncherLoading = false
     if err or type(data) ~= "string" or data == "" then
       derpSetStatus("Erro HTTP")
       derpWarn("falha ao carregar central: " .. tostring(err or "sem dados"))
+      if type(oldOpenManager) == "function" then pcall(oldOpenManager) end
       return
     end
 
@@ -176,19 +174,30 @@ local function derpLoadManager()
     if not fn then
       derpSetStatus("Central invalida")
       derpWarn("central invalida: " .. tostring(loadErr))
+      if type(oldOpenManager) == "function" then pcall(oldOpenManager) end
       return
     end
 
+    derpGlobal.JQMOpenManager = nil
+    derpGlobal.JQMScriptManagerVersion = nil
     local ok, runErr = pcall(fn)
     if not ok then
+      derpGlobal.JQMOpenManager = oldOpenManager
+      derpGlobal.JQMScriptManagerVersion = oldManagerVersion
       derpSetStatus("Erro na central")
       derpWarn("erro na central: " .. tostring(runErr))
+      if type(oldOpenManager) == "function" then pcall(oldOpenManager) end
       return
     end
 
     if type(derpGlobal.JQMOpenManager) == "function" then
-      derpGlobal.JQMOpenManager()
-      derpSetStatus("Central de acesso")
+      local opened, openErr = pcall(derpGlobal.JQMOpenManager)
+      if opened then
+        derpSetStatus("Central de acesso")
+      else
+        derpSetStatus("Erro ao abrir")
+        derpWarn("erro ao abrir central: " .. tostring(openErr))
+      end
     else
       derpSetStatus("Central sem janela")
     end

@@ -1,7 +1,7 @@
 -- Derpetson Scripts central bridge.
 -- Ponto fixo para abrir a central mesmo sem carregar um produto especifico.
 
-local JQM_MANAGER_URL = "https://jequimultiassessoria.com.br/license_server/manager.lua?v=2026061231"
+local JQM_MANAGER_URL = "https://jequimultiassessoria.com.br/license_server/manager.lua?v=2026061232"
 
 local function jqmGlobals()
   if type(_G) == "table" then return _G end
@@ -88,30 +88,39 @@ local function jqmHttpGet(url, callback)
 end
 
 local function jqmLoadManager()
-  if type(jqmGlobal.JQMOpenManager) == "function" then
-    jqmGlobal.JQMOpenManager()
-    return
-  end
   if jqmGlobal.JQMScriptManagerBootstrapLoading == true then return end
   jqmGlobal.JQMScriptManagerBootstrapLoading = true
+  local oldOpenManager = jqmGlobal.JQMOpenManager
+  local oldManagerVersion = jqmGlobal.JQMScriptManagerVersion
 
   jqmHttpGet(JQM_MANAGER_URL, function(data, err)
     jqmGlobal.JQMScriptManagerBootstrapLoading = false
     if err or type(data) ~= "string" or data == "" then
       jqmWarn("falha ao carregar central: " .. tostring(err or "sem dados"))
+      if type(oldOpenManager) == "function" then pcall(oldOpenManager) end
       return
     end
 
     local fn, loadErr = jqmLoadChunk(data, "@jqm_script_manager.lua")
     if not fn then
       jqmWarn("central invalida: " .. tostring(loadErr))
+      if type(oldOpenManager) == "function" then pcall(oldOpenManager) end
       return
     end
 
+    jqmGlobal.JQMOpenManager = nil
+    jqmGlobal.JQMScriptManagerVersion = nil
     local ok, runErr = pcall(fn)
     if not ok then
+      jqmGlobal.JQMOpenManager = oldOpenManager
+      jqmGlobal.JQMScriptManagerVersion = oldManagerVersion
       jqmWarn("erro na central: " .. tostring(runErr))
+      if type(oldOpenManager) == "function" then pcall(oldOpenManager) end
       return
+    end
+    if type(jqmGlobal.JQMOpenManager) == "function" then
+      local opened, openErr = pcall(jqmGlobal.JQMOpenManager)
+      if not opened then jqmWarn("erro ao abrir central: " .. tostring(openErr)) end
     end
     jqmWarn("central Derpetson carregada")
   end)

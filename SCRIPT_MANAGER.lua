@@ -15,7 +15,7 @@ local function jqmGlobals()
 end
 
 local jqmGlobal = jqmGlobals()
-local JQM_MANAGER_VERSION = 2026061229
+local JQM_MANAGER_VERSION = 2026061228
 if jqmGlobal.JQMScriptManagerVersion == JQM_MANAGER_VERSION and type(jqmGlobal.JQMOpenManager) == "function" then
   jqmGlobal.JQMOpenManager()
   return
@@ -63,91 +63,6 @@ local JQM_NATIVE_WIDGET_CLASSES = {
 }
 
 local JQM_SETUP_IDS = { "setup", "Setup", "push", "edit", "cfg", "config" }
-
-local JQM_MENU_ITEMS = {
-  { id = "dashboard", label = "Dashboard", module = nil },
-  { id = "combat", label = "Combate", module = "combo" },
-  { id = "pvp", label = "PvP", module = "combo" },
-  { id = "castle", label = "Castle", module = "castle_manager" },
-  { id = "defense", label = "Defesa", module = "holiday_aoe" },
-  { id = "utility", label = "Utilidades", module = nil },
-  { id = "general", label = "Geral", module = nil }
-}
-
-local JQM_MENU_CONTROL_IDS = {
-  dashboard = "navDashboard",
-  combat = "navCombat",
-  pvp = "navPvp",
-  castle = "navCastle",
-  defense = "navDefense",
-  utility = "navUtility",
-  general = "navGeneral"
-}
-
-local JQM_MODULE_DETAIL = {
-  combo = {
-    title = "Combo Espart V3",
-    category = "Combate / PvP",
-    storageKey = "ComboSystem_MultiLideres",
-    summary = {
-      { label = "Caller", key = "callersText", default = "nao definido" },
-      { label = "Delay", key = "comboSpellStepMs", default = 500, suffix = "ms" },
-      { label = "Modo", key = "smartRotationEnabled", default = false, on = "Inteligente", off = "Manual" }
-    },
-    config = {
-      { label = "Caller", key = "callersText", default = "" },
-      { label = "Chat", key = "chatName", default = "ESPARTANOS" },
-      { label = "Delay combo", key = "comboSpellStepMs", default = 500, kind = "number", suffix = "ms" },
-      { label = "Cooldown", key = "comboSpellCooldownMs", default = 700, kind = "number", suffix = "ms" },
-      { label = "Smart rotation", key = "smartRotationEnabled", default = false, kind = "bool" },
-      { label = "Trap", key = "trapEnabled", default = false, kind = "bool" }
-    }
-  },
-  castle_manager = {
-    title = "Castle Pro",
-    category = "Castle",
-    storageKey = "CastleManagerPro",
-    summary = {
-      { label = "Area", key = "ultimaArea", default = "-" },
-      { label = "Logout", key = "timeoutLogoutMin", default = 3, suffix = " min" },
-      { label = "Whitelist", key = "usarWhitelist", default = true, on = "Ligada", off = "Desligada" }
-    },
-    config = {
-      { label = "Guilds aliadas", key = "guildsAliadasText", default = "" },
-      { label = "Guilds inimigas", key = "guildsInimigasText", default = "" },
-      { label = "Espera dominio", key = "tempoEsperaDominioMin", default = 10, kind = "number", suffix = " min" },
-      { label = "Timeout logout", key = "timeoutLogoutMin", default = 3, kind = "number", suffix = " min" },
-      { label = "Whitelist", key = "usarWhitelist", default = true, kind = "bool" },
-      { label = "Check PZ", key = "usarCheckPzComando", default = true, kind = "bool" }
-    }
-  },
-  holiday_aoe = {
-    title = "Holiday AOE",
-    category = "Defesa",
-    storageKey = "holiday_aoe_vocation_v12_sem_icones_pvp_area_ascii",
-    summary = {
-      { label = "Vocacao", key = "forceVocation", default = "auto" },
-      { label = "Loop", key = "mainLoopMs", default = 100, suffix = "ms" },
-      { label = "Safe mode", key = "pveSafeMode", default = false, on = "ON", off = "OFF" }
-    },
-    config = {
-      { label = "Vocacao", key = "forceVocation", default = "knight" },
-      { label = "Loop combate", key = "mainLoopMs", default = 100, kind = "number", suffix = "ms" },
-      { label = "Scan", key = "scanIntervalMs", default = 150, kind = "number", suffix = "ms" },
-      { label = "Min wave mobs", key = "minWaveMobs", default = 1, kind = "number" },
-      { label = "Safe mode", key = "pveSafeMode", default = false, kind = "bool" },
-      { label = "Combo mode", key = "enableComboMode", default = false, kind = "bool" }
-    }
-  }
-}
-
-local JQM_STATUS_THEME = {
-  active = { text = "ATIVO", color = "#76ff9f", bg = "#17281cdd" },
-  inactive = { text = "INATIVO", color = "#ff7b7b", bg = "#251616dd" },
-  paused = { text = "PAUSADO", color = "#ffd36b", bg = "#2d2617dd" },
-  error = { text = "ERRO", color = "#ff9b52", bg = "#2a1b12dd" },
-  loading = { text = "CARREGANDO", color = "#6bb7ff", bg = "#152233dd" }
-}
 
 local jqmWindow = nil
 local jqmLauncher = nil
@@ -201,7 +116,7 @@ local function jqmWindowControl(id)
   if not jqmWindow then return nil end
   local direct = jqmChild(jqmWindow, id)
   if direct then return direct end
-  for _, parentId in ipairs({ "headerPanel", "statsPanel", "sidePanel", "mainPanel", "moduleListPanel", "detailPanel", "configPanel", "nativeBridgePanel", "listPanel", "helpPanel", "footer" }) do
+  for _, parentId in ipairs({ "headerPanel", "listPanel", "helpPanel", "footer" }) do
     local panel = jqmChild(jqmWindow, parentId)
     local child = jqmChild(panel, id)
     if child then return child end
@@ -212,13 +127,8 @@ end
 storage.JQMScriptManager = type(storage.JQMScriptManager) == "table" and storage.JQMScriptManager or {}
 storage.JQMScriptManager.selected = type(storage.JQMScriptManager.selected) == "table" and storage.JQMScriptManager.selected or {}
 storage.JQMScriptManager.loaded = type(storage.JQMScriptManager.loaded) == "table" and storage.JQMScriptManager.loaded or {}
-storage.JQMScriptManager.view = storage.JQMScriptManager.view or "dashboard"
-storage.JQMScriptManager.focus = storage.JQMScriptManager.focus or "combo"
 storage.Combo = type(storage.Combo) == "table" and storage.Combo or {}
 storage.Combo.licenseKey = storage.Combo.licenseKey or ""
-
-local jqmUiSyncing = false
-local jqmConfigRowBindings = {}
 
 local function jqmSetText(widget, text)
   if widget and widget.setText then
@@ -279,123 +189,6 @@ local function jqmSetVisible(widget, visible)
       pcall(function() widget:setVisible(true) end)
     end
   end
-end
-
-local function jqmSetTooltip(widget, text)
-  if widget and widget.setTooltip then
-    pcall(function() widget:setTooltip(tostring(text or "")) end)
-  end
-end
-
-local function jqmMenuItem(viewId)
-  for _, item in ipairs(JQM_MENU_ITEMS) do
-    if item.id == viewId then return item end
-  end
-  return JQM_MENU_ITEMS[1]
-end
-
-local function jqmDetail(scriptName)
-  return JQM_MODULE_DETAIL[scriptName]
-end
-
-local function jqmModuleStorage(scriptName)
-  local detail = jqmDetail(scriptName)
-  if not detail or not detail.storageKey then return nil end
-  storage[detail.storageKey] = type(storage[detail.storageKey]) == "table" and storage[detail.storageKey] or {}
-  return storage[detail.storageKey]
-end
-
-local function jqmConfigValue(scriptName, field)
-  local data = jqmModuleStorage(scriptName)
-  if not data or not field then return field and field.default or "" end
-  if data[field.key] == nil then
-    data[field.key] = field.default
-  end
-  return data[field.key]
-end
-
-local function jqmFormatConfigValue(scriptName, field)
-  local value = jqmConfigValue(scriptName, field)
-  if field and field.kind == "bool" then
-    return value == true and "ON" or "OFF"
-  end
-  if type(value) == "boolean" then
-    if field and field.on and field.off then
-      return value and field.on or field.off
-    end
-    return value and "ON" or "OFF"
-  end
-  if value == nil or value == "" then value = field and field.default or "" end
-  return tostring(value or "") .. tostring(field and field.suffix or "")
-end
-
-local function jqmParseConfigValue(field, text)
-  if field and field.kind == "bool" then
-    local value = tostring(text or ""):lower()
-    return value == "on" or value == "true" or value == "1" or value == "sim" or value == "ativo"
-  end
-  if field and field.kind == "number" then
-    local number = tonumber(tostring(text or ""):match("%-?%d+"))
-    return number or tonumber(field.default) or 0
-  end
-  return tostring(text or "")
-end
-
-local function jqmSetConfigValue(scriptName, field, value)
-  local data = jqmModuleStorage(scriptName)
-  if not data or not field then return end
-  data[field.key] = value
-end
-
-local function jqmModuleEnabled(scriptName)
-  local data = jqmModuleStorage(scriptName)
-  if scriptName == "holiday_aoe" and data then
-    return data.enablePveMode == true or data.enablePvpMode == true or data.enableComboMode == true
-  end
-  if data and data.enabled ~= nil then return data.enabled == true end
-  return jqmRuntimeLoaded[scriptName] == true
-end
-
-local function jqmSetModuleEnabled(scriptName, enabled)
-  local data = jqmModuleStorage(scriptName)
-  if data then
-    if scriptName == "holiday_aoe" then
-      data.enablePveMode = enabled == true
-      if enabled ~= true then
-        data.enablePvpMode = false
-        data.enableComboMode = false
-      end
-    else
-      data.enabled = enabled == true
-    end
-  end
-  if scriptName == "castle_manager" then
-    local api = jqmGlobal.CastleManager
-    if type(api) == "table" and type(api.setEnabled) == "function" then
-      pcall(function() api.setEnabled(enabled == true) end)
-    end
-  elseif scriptName == "holiday_aoe" then
-    local api = jqmGlobal.HolidayAOE
-    if type(api) == "table" and type(api.setEnabled) == "function" then
-      pcall(function() api.setEnabled(enabled == true) end)
-    end
-  end
-end
-
-local function jqmModuleStateKey(scriptName)
-  if jqmRuntimeLoaded[scriptName] ~= true then return "inactive" end
-  if jqmModuleEnabled(scriptName) then return "active" end
-  return "paused"
-end
-
-local function jqmStatusTheme(state)
-  return JQM_STATUS_THEME[state or "inactive"] or JQM_STATUS_THEME.inactive
-end
-
-local function jqmSelectView(viewId, scriptName)
-  local menu = jqmMenuItem(viewId)
-  storage.JQMScriptManager.view = menu.id
-  storage.JQMScriptManager.focus = scriptName or menu.module or storage.JQMScriptManager.focus or "combo"
 end
 
 local function jqmNativeHost(scriptName)
@@ -618,16 +411,8 @@ local function jqmLoadedCount()
   return count
 end
 
-local function jqmCountByState(state)
-  local count = 0
-  for _, item in ipairs(JQM_SCRIPTS) do
-    if jqmModuleStateKey(item.name) == state then count = count + 1 end
-  end
-  return count
-end
-
 local function jqmMainSummary()
-  local count = jqmCountByState("active")
+  local count = jqmLoadedCount()
   if count == 1 then return "1 produto ativo" end
   if count > 1 then return tostring(count) .. " produtos ativos" end
   return "Selecionar scripts"
@@ -648,10 +433,13 @@ jqmScriptItem = function(scriptName)
 end
 
 local function jqmModuleStatus(scriptName)
-  local state = jqmModuleStateKey(scriptName)
-  local theme = jqmStatusTheme(state)
-  local titleColor = state == "inactive" and "#cfd8e3" or "#f3f7ff"
-  return theme.text, theme.color, theme.bg, titleColor
+  if jqmRuntimeLoaded[scriptName] == true then
+    return "Ativo", "#76ff9f", "#183820dd", "#dfffeb"
+  end
+  if storage.JQMScriptManager.selected[scriptName] == true then
+    return "Pausado", "#ffd36b", "#2d2617dd", "#ffe6a3"
+  end
+  return "Inativo", "#ff6f6f", "#171b22dd", "#cfd8e3"
 end
 
 local function jqmSetManagerStatus(text)
@@ -671,19 +459,15 @@ local function jqmUpdateModuleCard(item, hover)
   local badge = jqmWindowControl(prefix .. "Badge")
   local gear = jqmWindowControl(prefix .. "Gear")
   local statusText, statusColor, bgColor, titleColor = jqmModuleStatus(item.name)
-  local selected = storage.JQMScriptManager.focus == item.name
 
   if hover == true then
     bgColor = "#243041ee"
     titleColor = "#ffffff"
-  elseif selected then
-    bgColor = "#223044ee"
-    titleColor = "#ffffff"
   end
 
   jqmSetText(icon, item.icon or "")
-  jqmSetText(title, item.short or item.label)
-  jqmSetText(desc, item.desc or item.file or "")
+  jqmSetText(title, item.label)
+  jqmSetText(desc, item.file or item.desc or "")
   jqmSetText(badge, statusText)
   jqmSetColor(badge, statusColor)
   jqmSetColor(title, titleColor)
@@ -691,153 +475,6 @@ local function jqmUpdateModuleCard(item, hover)
   jqmSetColor(desc, "#9fb2c4")
   jqmSetColor(gear, hover and "#ffd36b" or "#dce4ee")
   jqmSetBackground(card, bgColor)
-end
-
-local function jqmRenderStats()
-  jqmSetText(jqmWindowControl("activeCount"), tostring(jqmCountByState("active")))
-  jqmSetText(jqmWindowControl("pausedCount"), tostring(jqmCountByState("paused")))
-  jqmSetText(jqmWindowControl("inactiveCount"), tostring(jqmCountByState("inactive")))
-  jqmSetText(jqmWindowControl("totalCount"), tostring(#JQM_SCRIPTS))
-  jqmSetText(jqmWindowControl("status"), jqmMainSummary())
-end
-
-local function jqmRenderMenu()
-  local current = storage.JQMScriptManager.view or "dashboard"
-  for _, item in ipairs(JQM_MENU_ITEMS) do
-    local button = jqmWindowControl(JQM_MENU_CONTROL_IDS[item.id])
-    if button then
-      local selected = item.id == current
-      jqmSetText(button, item.label)
-      jqmSetColor(button, selected and "#ffffff" or "#cfd8e3")
-      jqmSetBackground(button, selected and "#26364dee" or "#141a23dd")
-    end
-  end
-end
-
-local function jqmSummaryLine(scriptName, index)
-  local detail = jqmDetail(scriptName)
-  local field = detail and detail.summary and detail.summary[index]
-  if not field then return "" end
-  return tostring(field.label or "") .. ": " .. jqmFormatConfigValue(scriptName, field)
-end
-
-local function jqmSetConfigRow(index, label, value, field, scriptName)
-  local row = jqmWindowControl("configRow" .. tostring(index))
-  local labelWidget = jqmWindowControl("configLabel" .. tostring(index))
-  local editWidget = jqmWindowControl("configValue" .. tostring(index))
-  local actionWidget = jqmWindowControl("configAction" .. tostring(index))
-  jqmConfigRowBindings[index] = field and { scriptName = scriptName, field = field } or nil
-
-  if not field then
-    jqmSetVisible(row, false)
-    return
-  end
-
-  jqmSetVisible(row, true)
-  jqmSetText(labelWidget, label or "")
-  jqmUiSyncing = true
-  jqmSetText(editWidget, value or "")
-  jqmUiSyncing = false
-
-  if field.kind == "bool" then
-    jqmSetVisible(actionWidget, true)
-    jqmSetText(actionWidget, "Alternar")
-    jqmSetColor(editWidget, value == "ON" and "#76ff9f" or "#ff7b7b")
-  else
-    jqmSetVisible(actionWidget, false)
-    jqmSetColor(editWidget, "#e8edf4")
-  end
-end
-
-local function jqmRenderConfigRows(scriptName)
-  local detail = jqmDetail(scriptName)
-  local fields = detail and detail.config or {}
-  jqmSetText(jqmWindowControl("configTitle"), scriptName and "Configuracoes principais" or "Central")
-  for index = 1, 6 do
-    local field = fields[index]
-    if field then
-      jqmSetConfigRow(index, field.label, jqmFormatConfigValue(scriptName, field), field, scriptName)
-    else
-      jqmSetConfigRow(index)
-    end
-  end
-end
-
-local function jqmRenderUtilityView(viewId)
-  local title = viewId == "general" and "Configuracoes gerais" or "Utilidades"
-  local subtitle = viewId == "general" and "Licenca, permissao e ambiente" or "Atualizador, licenca e carregamento"
-  jqmSetText(jqmWindowControl("detailTitle"), title)
-  jqmSetText(jqmWindowControl("detailSubtitle"), subtitle)
-  jqmSetText(jqmWindowControl("detailBadge"), "ONLINE")
-  jqmSetColor(jqmWindowControl("detailBadge"), "#6bb7ff")
-  jqmSetText(jqmWindowControl("summaryLine1"), "Servidor: Jequi Multi Assessoria")
-  jqmSetText(jqmWindowControl("summaryLine2"), "Licenca: " .. ((storage.Combo and storage.Combo.licenseKey ~= "" and "informada") or "key opcional"))
-  jqmSetText(jqmWindowControl("summaryLine3"), "HWID/MAC: enviado automaticamente")
-  jqmSetText(jqmWindowControl("detailPrimary"), "Carregar liberados")
-  jqmSetText(jqmWindowControl("detailSecondary"), "Marcar todos")
-  jqmSetText(jqmWindowControl("detailAdvanced"), "Limpar selecao")
-  jqmRenderConfigRows(nil)
-end
-
-local function jqmRenderDashboard()
-  jqmSetText(jqmWindowControl("detailTitle"), "Dashboard")
-  jqmSetText(jqmWindowControl("detailSubtitle"), "Resumo geral dos produtos liberados")
-  jqmSetText(jqmWindowControl("detailBadge"), "CONTROL")
-  jqmSetColor(jqmWindowControl("detailBadge"), "#ffd36b")
-  jqmSetText(jqmWindowControl("summaryLine1"), "Ativos: " .. tostring(jqmCountByState("active")) .. "  Pausados: " .. tostring(jqmCountByState("paused")))
-  jqmSetText(jqmWindowControl("summaryLine2"), "Inativos: " .. tostring(jqmCountByState("inactive")) .. "  Total: " .. tostring(#JQM_SCRIPTS))
-  jqmSetText(jqmWindowControl("summaryLine3"), "Acoes centralizadas: carregar, pausar e configurar")
-  jqmSetText(jqmWindowControl("detailPrimary"), "Carregar liberados")
-  jqmSetText(jqmWindowControl("detailSecondary"), "Marcar todos")
-  jqmSetText(jqmWindowControl("detailAdvanced"), "Limpar selecao")
-  jqmRenderConfigRows(nil)
-end
-
-local function jqmRenderModuleDetail(scriptName)
-  local item = jqmScriptItem(scriptName)
-  local detail = jqmDetail(scriptName)
-  if not item or not detail then
-    jqmRenderDashboard()
-    return
-  end
-
-  local state = jqmModuleStateKey(scriptName)
-  local theme = jqmStatusTheme(state)
-  jqmSetText(jqmWindowControl("detailTitle"), detail.title or item.label)
-  jqmSetText(jqmWindowControl("detailSubtitle"), tostring(detail.category or item.category or "") .. "  |  " .. tostring(item.desc or ""))
-  jqmSetText(jqmWindowControl("detailBadge"), theme.text)
-  jqmSetColor(jqmWindowControl("detailBadge"), theme.color)
-  jqmSetText(jqmWindowControl("summaryLine1"), jqmSummaryLine(scriptName, 1))
-  jqmSetText(jqmWindowControl("summaryLine2"), jqmSummaryLine(scriptName, 2))
-  jqmSetText(jqmWindowControl("summaryLine3"), jqmSummaryLine(scriptName, 3))
-  if jqmRuntimeLoaded[scriptName] == true then
-    jqmSetText(jqmWindowControl("detailPrimary"), jqmModuleEnabled(scriptName) and "Desativar" or "Ativar")
-    jqmSetText(jqmWindowControl("detailSecondary"), "Recarregar")
-    jqmSetText(jqmWindowControl("detailAdvanced"), jqmNativeSetupButtons[scriptName] and "Setup nativo" or "Setup indisponivel")
-  else
-    jqmSetText(jqmWindowControl("detailPrimary"), "Ativar")
-    jqmSetText(jqmWindowControl("detailSecondary"), "Solicitar acesso")
-    jqmSetText(jqmWindowControl("detailAdvanced"), "Aguardando carga")
-  end
-  jqmRenderConfigRows(scriptName)
-end
-
-local function jqmRenderMainView()
-  local view = storage.JQMScriptManager.view or "dashboard"
-  local menu = jqmMenuItem(view)
-  if view == "dashboard" then
-    jqmRenderDashboard()
-  elseif view == "utility" or view == "general" then
-    jqmRenderUtilityView(view)
-  else
-    jqmRenderModuleDetail(menu.module or storage.JQMScriptManager.focus or "combo")
-  end
-end
-
-local function jqmCurrentModule()
-  local view = storage.JQMScriptManager.view or "dashboard"
-  local menu = jqmMenuItem(view)
-  return menu.module or storage.JQMScriptManager.focus
 end
 
 local function jqmRefreshManagerUi()
@@ -848,10 +485,8 @@ local function jqmRefreshManagerUi()
       jqmPrepareProxySetup(item.name)
     end
   end
-  jqmRenderStats()
-  jqmRenderMenu()
-  jqmRenderMainView()
   jqmSetText(jqmChild(jqmLauncher, "status") or jqmChild(jqmLauncher, "subtitle"), jqmMainSummary())
+  jqmSetText(jqmWindowControl("status"), jqmSelectedSummary())
 end
 
 local jqmRequestSingle = nil
@@ -1902,876 +1537,6 @@ DerpetsonScriptsWindow < MainWindow
       width: 62
       height: 24
       text: Fechar
-
-DerpetsonControlWindow < MainWindow
-  text: Derpetson Scripts
-  size: 660 520
-  padding: 9
-  @onEscape: self:hide()
-
-  Panel
-    id: headerPanel
-    anchors.top: parent.top
-    anchors.left: parent.left
-    anchors.right: parent.right
-    height: 66
-    image-source: /images/ui/panel_flat
-    image-border: 5
-    padding: 7
-    background-color: #0f151dee
-
-    Label
-      id: title
-      anchors.top: parent.top
-      anchors.left: parent.left
-      width: 210
-      height: 18
-      color: #ffd36b
-      font: verdana-11px-bold
-      text: DERPETSON SCRIPTS
-
-    Label
-      id: subtitle
-      anchors.top: title.bottom
-      anchors.left: parent.left
-      width: 210
-      margin-top: 2
-      height: 15
-      color: #dce4ee
-      font: verdana-11px
-      text: Control Center
-
-    Label
-      id: status
-      anchors.top: subtitle.bottom
-      anchors.left: parent.left
-      width: 210
-      margin-top: 3
-      height: 15
-      color: #7ee8a8
-      font: verdana-11px-bold
-      text: Selecionar scripts
-
-    Panel
-      id: statsPanel
-      anchors.top: parent.top
-      anchors.right: parent.right
-      width: 335
-      height: 50
-      background-color: #111923cc
-
-      Label
-        id: activeLabel
-        anchors.top: parent.top
-        anchors.left: parent.left
-        margin-left: 8
-        margin-top: 6
-        width: 58
-        height: 13
-        color: #76ff9f
-        font: verdana-11px-bold
-        text: Ativos
-
-      Label
-        id: activeCount
-        anchors.top: activeLabel.bottom
-        anchors.left: activeLabel.left
-        margin-top: 3
-        width: 58
-        height: 16
-        text-align: center
-        color: #ffffff
-        font: verdana-11px-bold
-        text: 0
-
-      Label
-        id: pausedLabel
-        anchors.top: parent.top
-        anchors.left: activeLabel.right
-        margin-left: 20
-        margin-top: 6
-        width: 62
-        height: 13
-        color: #ffd36b
-        font: verdana-11px-bold
-        text: Pausados
-
-      Label
-        id: pausedCount
-        anchors.top: pausedLabel.bottom
-        anchors.left: pausedLabel.left
-        margin-top: 3
-        width: 62
-        height: 16
-        text-align: center
-        color: #ffffff
-        font: verdana-11px-bold
-        text: 0
-
-      Label
-        id: inactiveLabel
-        anchors.top: parent.top
-        anchors.left: pausedLabel.right
-        margin-left: 20
-        margin-top: 6
-        width: 62
-        height: 13
-        color: #ff7b7b
-        font: verdana-11px-bold
-        text: Inativos
-
-      Label
-        id: inactiveCount
-        anchors.top: inactiveLabel.bottom
-        anchors.left: inactiveLabel.left
-        margin-top: 3
-        width: 62
-        height: 16
-        text-align: center
-        color: #ffffff
-        font: verdana-11px-bold
-        text: 0
-
-      Label
-        id: totalLabel
-        anchors.top: parent.top
-        anchors.left: inactiveLabel.right
-        margin-left: 20
-        margin-top: 6
-        width: 52
-        height: 13
-        color: #6bb7ff
-        font: verdana-11px-bold
-        text: Total
-
-      Label
-        id: totalCount
-        anchors.top: totalLabel.bottom
-        anchors.left: totalLabel.left
-        margin-top: 3
-        width: 52
-        height: 16
-        text-align: center
-        color: #ffffff
-        font: verdana-11px-bold
-        text: 3
-
-  Panel
-    id: sidePanel
-    anchors.top: headerPanel.bottom
-    anchors.left: parent.left
-    anchors.bottom: footer.top
-    margin-top: 8
-    margin-bottom: 8
-    width: 146
-    image-source: /images/ui/panel_flat
-    image-border: 5
-    padding: 6
-    background-color: #111820ee
-
-    Label
-      id: menuTitle
-      anchors.top: parent.top
-      anchors.left: parent.left
-      anchors.right: parent.right
-      height: 15
-      color: #ffd36b
-      font: verdana-11px-bold
-      text: Navegacao
-
-    Button
-      id: navDashboard
-      anchors.top: menuTitle.bottom
-      anchors.left: parent.left
-      anchors.right: parent.right
-      margin-top: 6
-      height: 24
-      text-align: left
-      text: Dashboard
-
-    Button
-      id: navCombat
-      anchors.top: navDashboard.bottom
-      anchors.left: parent.left
-      anchors.right: parent.right
-      margin-top: 4
-      height: 24
-      text-align: left
-      text: Combate
-
-    Button
-      id: navPvp
-      anchors.top: navCombat.bottom
-      anchors.left: parent.left
-      anchors.right: parent.right
-      margin-top: 4
-      height: 24
-      text-align: left
-      text: PvP
-
-    Button
-      id: navCastle
-      anchors.top: navPvp.bottom
-      anchors.left: parent.left
-      anchors.right: parent.right
-      margin-top: 4
-      height: 24
-      text-align: left
-      text: Castle
-
-    Button
-      id: navDefense
-      anchors.top: navCastle.bottom
-      anchors.left: parent.left
-      anchors.right: parent.right
-      margin-top: 4
-      height: 24
-      text-align: left
-      text: Defesa
-
-    Button
-      id: navUtility
-      anchors.top: navDefense.bottom
-      anchors.left: parent.left
-      anchors.right: parent.right
-      margin-top: 4
-      height: 24
-      text-align: left
-      text: Utilidades
-
-    Button
-      id: navGeneral
-      anchors.top: navUtility.bottom
-      anchors.left: parent.left
-      anchors.right: parent.right
-      margin-top: 4
-      height: 24
-      text-align: left
-      text: Geral
-
-    Panel
-      id: moduleListPanel
-      anchors.top: navGeneral.bottom
-      anchors.left: parent.left
-      anchors.right: parent.right
-      anchors.bottom: parent.bottom
-      margin-top: 10
-      background-color: #0d121acc
-
-      Label
-        id: moduleTitle
-        anchors.top: parent.top
-        anchors.left: parent.left
-        anchors.right: parent.right
-        margin-top: 5
-        height: 14
-        text-align: center
-        color: #9fb2c4
-        font: verdana-11px
-        text: Modulos
-
-      Panel
-        id: comboCard
-        anchors.top: moduleTitle.bottom
-        anchors.left: parent.left
-        anchors.right: parent.right
-        margin-top: 5
-        height: 46
-        padding: 4
-        image-source: /images/ui/panel_flat
-        image-border: 5
-        background-color: #171b22dd
-
-        Label
-          id: comboIcon
-          anchors.left: parent.left
-          anchors.top: parent.top
-          width: 25
-          height: 36
-          text-align: center
-          color: #ffd36b
-          font: verdana-11px-bold
-          text: ATK
-
-        Label
-          id: comboTitle
-          anchors.left: comboIcon.right
-          anchors.right: parent.right
-          anchors.top: parent.top
-          margin-left: 3
-          height: 15
-          color: #e8edf4
-          font: verdana-11px-bold
-          text: COMBO
-
-        Label
-          id: comboDesc
-          anchors.left: comboIcon.right
-          anchors.right: parent.right
-          anchors.top: comboTitle.bottom
-          margin-left: 3
-          height: 13
-          color: #9fb2c4
-          font: verdana-11px
-          text: runas
-
-        Label
-          id: comboBadge
-          anchors.left: comboIcon.right
-          anchors.top: comboDesc.bottom
-          margin-left: 3
-          width: 70
-          height: 13
-          color: #ff7b7b
-          font: verdana-11px-bold
-          text: INATIVO
-
-      Panel
-        id: castleCard
-        anchors.top: comboCard.bottom
-        anchors.left: parent.left
-        anchors.right: parent.right
-        margin-top: 5
-        height: 46
-        padding: 4
-        image-source: /images/ui/panel_flat
-        image-border: 5
-        background-color: #171b22dd
-
-        Label
-          id: castleIcon
-          anchors.left: parent.left
-          anchors.top: parent.top
-          width: 25
-          height: 36
-          text-align: center
-          color: #ffd36b
-          font: verdana-11px-bold
-          text: CST
-
-        Label
-          id: castleTitle
-          anchors.left: castleIcon.right
-          anchors.right: parent.right
-          anchors.top: parent.top
-          margin-left: 3
-          height: 15
-          color: #e8edf4
-          font: verdana-11px-bold
-          text: CASTLE
-
-        Label
-          id: castleDesc
-          anchors.left: castleIcon.right
-          anchors.right: parent.right
-          anchors.top: castleTitle.bottom
-          margin-left: 3
-          height: 13
-          color: #9fb2c4
-          font: verdana-11px
-          text: logout
-
-        Label
-          id: castleBadge
-          anchors.left: castleIcon.right
-          anchors.top: castleDesc.bottom
-          margin-left: 3
-          width: 70
-          height: 13
-          color: #ff7b7b
-          font: verdana-11px-bold
-          text: INATIVO
-
-      Panel
-        id: holidayCard
-        anchors.top: castleCard.bottom
-        anchors.left: parent.left
-        anchors.right: parent.right
-        margin-top: 5
-        height: 46
-        padding: 4
-        image-source: /images/ui/panel_flat
-        image-border: 5
-        background-color: #171b22dd
-
-        Label
-          id: holidayIcon
-          anchors.left: parent.left
-          anchors.top: parent.top
-          width: 25
-          height: 36
-          text-align: center
-          color: #ffd36b
-          font: verdana-11px-bold
-          text: DEF
-
-        Label
-          id: holidayTitle
-          anchors.left: holidayIcon.right
-          anchors.right: parent.right
-          anchors.top: parent.top
-          margin-left: 3
-          height: 15
-          color: #e8edf4
-          font: verdana-11px-bold
-          text: HOLIDAY
-
-        Label
-          id: holidayDesc
-          anchors.left: holidayIcon.right
-          anchors.right: parent.right
-          anchors.top: holidayTitle.bottom
-          margin-left: 3
-          height: 13
-          color: #9fb2c4
-          font: verdana-11px
-          text: defesa
-
-        Label
-          id: holidayBadge
-          anchors.left: holidayIcon.right
-          anchors.top: holidayDesc.bottom
-          margin-left: 3
-          width: 70
-          height: 13
-          color: #ff7b7b
-          font: verdana-11px-bold
-          text: INATIVO
-
-  Panel
-    id: mainPanel
-    anchors.top: headerPanel.bottom
-    anchors.left: sidePanel.right
-    anchors.right: parent.right
-    anchors.bottom: footer.top
-    margin-left: 8
-    margin-top: 8
-    margin-bottom: 8
-    image-source: /images/ui/panel_flat
-    image-border: 5
-    padding: 8
-    background-color: #101720ee
-
-    Panel
-      id: detailPanel
-      anchors.top: parent.top
-      anchors.left: parent.left
-      anchors.right: parent.right
-      height: 132
-      background-color: #131c28dd
-
-      Label
-        id: detailTitle
-        anchors.top: parent.top
-        anchors.left: parent.left
-        anchors.right: detailBadge.left
-        margin-left: 8
-        margin-top: 8
-        height: 18
-        color: #ffffff
-        font: verdana-11px-bold
-        text: Dashboard
-
-      Label
-        id: detailBadge
-        anchors.top: parent.top
-        anchors.right: parent.right
-        margin-right: 8
-        margin-top: 8
-        width: 92
-        height: 18
-        text-align: center
-        color: #ffd36b
-        font: verdana-11px-bold
-        text: CONTROL
-
-      Label
-        id: detailSubtitle
-        anchors.top: detailTitle.bottom
-        anchors.left: detailTitle.left
-        anchors.right: parent.right
-        margin-top: 4
-        height: 15
-        color: #9fb2c4
-        font: verdana-11px
-        text: Resumo geral
-
-      Label
-        id: summaryLine1
-        anchors.top: detailSubtitle.bottom
-        anchors.left: detailTitle.left
-        anchors.right: parent.right
-        margin-top: 9
-        height: 15
-        color: #e8edf4
-        font: verdana-11px
-        text: Ativos: 0
-
-      Label
-        id: summaryLine2
-        anchors.top: summaryLine1.bottom
-        anchors.left: detailTitle.left
-        anchors.right: parent.right
-        margin-top: 3
-        height: 15
-        color: #e8edf4
-        font: verdana-11px
-        text: Inativos: 0
-
-      Label
-        id: summaryLine3
-        anchors.top: summaryLine2.bottom
-        anchors.left: detailTitle.left
-        anchors.right: parent.right
-        margin-top: 3
-        height: 15
-        color: #e8edf4
-        font: verdana-11px
-        text: Pronto
-
-      Button
-        id: detailPrimary
-        anchors.left: detailTitle.left
-        anchors.bottom: parent.bottom
-        margin-bottom: 7
-        width: 112
-        height: 24
-        text: Ativar
-
-      Button
-        id: detailSecondary
-        anchors.left: detailPrimary.right
-        anchors.bottom: detailPrimary.bottom
-        margin-left: 6
-        width: 120
-        height: 24
-        text: Recarregar
-
-      Button
-        id: detailAdvanced
-        anchors.left: detailSecondary.right
-        anchors.bottom: detailPrimary.bottom
-        margin-left: 6
-        width: 120
-        height: 24
-        text: Avancado
-
-    Panel
-      id: configPanel
-      anchors.top: detailPanel.bottom
-      anchors.left: parent.left
-      anchors.right: parent.right
-      anchors.bottom: parent.bottom
-      margin-top: 8
-      margin-bottom: 10
-      background-color: #0d121add
-
-      Label
-        id: configTitle
-        anchors.top: parent.top
-        anchors.left: parent.left
-        anchors.right: parent.right
-        margin-left: 8
-        margin-top: 7
-        height: 16
-        color: #ffd36b
-        font: verdana-11px-bold
-        text: Configuracoes principais
-
-      Panel
-        id: configRow1
-        anchors.top: configTitle.bottom
-        anchors.left: parent.left
-        anchors.right: parent.right
-        margin-top: 7
-        margin-left: 8
-        margin-right: 8
-        height: 29
-
-        Label
-          id: configLabel1
-          anchors.left: parent.left
-          anchors.top: parent.top
-          width: 118
-          height: 20
-          margin-top: 4
-          color: #dce4ee
-          font: verdana-11px-bold
-          text: Campo
-
-        TextEdit
-          id: configValue1
-          anchors.left: configLabel1.right
-          anchors.right: configAction1.left
-          anchors.top: parent.top
-          margin-left: 8
-          margin-right: 6
-          height: 23
-          text: ""
-
-        Button
-          id: configAction1
-          anchors.right: parent.right
-          anchors.top: parent.top
-          width: 62
-          height: 23
-          text: OK
-
-      Panel
-        id: configRow2
-        anchors.top: configRow1.bottom
-        anchors.left: configRow1.left
-        anchors.right: configRow1.right
-        margin-top: 4
-        height: 29
-
-        Label
-          id: configLabel2
-          anchors.left: parent.left
-          anchors.top: parent.top
-          width: 118
-          height: 20
-          margin-top: 4
-          color: #dce4ee
-          font: verdana-11px-bold
-          text: Campo
-
-        TextEdit
-          id: configValue2
-          anchors.left: configLabel2.right
-          anchors.right: configAction2.left
-          anchors.top: parent.top
-          margin-left: 8
-          margin-right: 6
-          height: 23
-          text: ""
-
-        Button
-          id: configAction2
-          anchors.right: parent.right
-          anchors.top: parent.top
-          width: 62
-          height: 23
-          text: OK
-
-      Panel
-        id: configRow3
-        anchors.top: configRow2.bottom
-        anchors.left: configRow1.left
-        anchors.right: configRow1.right
-        margin-top: 4
-        height: 29
-
-        Label
-          id: configLabel3
-          anchors.left: parent.left
-          anchors.top: parent.top
-          width: 118
-          height: 20
-          margin-top: 4
-          color: #dce4ee
-          font: verdana-11px-bold
-          text: Campo
-
-        TextEdit
-          id: configValue3
-          anchors.left: configLabel3.right
-          anchors.right: configAction3.left
-          anchors.top: parent.top
-          margin-left: 8
-          margin-right: 6
-          height: 23
-          text: ""
-
-        Button
-          id: configAction3
-          anchors.right: parent.right
-          anchors.top: parent.top
-          width: 62
-          height: 23
-          text: OK
-
-      Panel
-        id: configRow4
-        anchors.top: configRow3.bottom
-        anchors.left: configRow1.left
-        anchors.right: configRow1.right
-        margin-top: 4
-        height: 29
-
-        Label
-          id: configLabel4
-          anchors.left: parent.left
-          anchors.top: parent.top
-          width: 118
-          height: 20
-          margin-top: 4
-          color: #dce4ee
-          font: verdana-11px-bold
-          text: Campo
-
-        TextEdit
-          id: configValue4
-          anchors.left: configLabel4.right
-          anchors.right: configAction4.left
-          anchors.top: parent.top
-          margin-left: 8
-          margin-right: 6
-          height: 23
-          text: ""
-
-        Button
-          id: configAction4
-          anchors.right: parent.right
-          anchors.top: parent.top
-          width: 62
-          height: 23
-          text: OK
-
-      Panel
-        id: configRow5
-        anchors.top: configRow4.bottom
-        anchors.left: configRow1.left
-        anchors.right: configRow1.right
-        margin-top: 4
-        height: 29
-
-        Label
-          id: configLabel5
-          anchors.left: parent.left
-          anchors.top: parent.top
-          width: 118
-          height: 20
-          margin-top: 4
-          color: #dce4ee
-          font: verdana-11px-bold
-          text: Campo
-
-        TextEdit
-          id: configValue5
-          anchors.left: configLabel5.right
-          anchors.right: configAction5.left
-          anchors.top: parent.top
-          margin-left: 8
-          margin-right: 6
-          height: 23
-          text: ""
-
-        Button
-          id: configAction5
-          anchors.right: parent.right
-          anchors.top: parent.top
-          width: 62
-          height: 23
-          text: OK
-
-      Panel
-        id: configRow6
-        anchors.top: configRow5.bottom
-        anchors.left: configRow1.left
-        anchors.right: configRow1.right
-        margin-top: 4
-        height: 29
-
-        Label
-          id: configLabel6
-          anchors.left: parent.left
-          anchors.top: parent.top
-          width: 118
-          height: 20
-          margin-top: 4
-          color: #dce4ee
-          font: verdana-11px-bold
-          text: Campo
-
-        TextEdit
-          id: configValue6
-          anchors.left: configLabel6.right
-          anchors.right: configAction6.left
-          anchors.top: parent.top
-          margin-left: 8
-          margin-right: 6
-          height: 23
-          text: ""
-
-        Button
-          id: configAction6
-          anchors.right: parent.right
-          anchors.top: parent.top
-          width: 62
-          height: 23
-          text: OK
-
-    Panel
-      id: nativeBridgePanel
-      anchors.left: parent.left
-      anchors.right: parent.right
-      anchors.bottom: parent.bottom
-      height: 1
-      visible: false
-
-      Panel
-        id: comboNative
-        anchors.left: parent.left
-        anchors.top: parent.top
-        width: 1
-        height: 1
-
-      Panel
-        id: castleNative
-        anchors.left: comboNative.right
-        anchors.top: parent.top
-        width: 1
-        height: 1
-
-      Panel
-        id: holidayNative
-        anchors.left: castleNative.right
-        anchors.top: parent.top
-        width: 1
-        height: 1
-
-  Panel
-    id: footer
-    anchors.left: parent.left
-    anchors.right: parent.right
-    anchors.bottom: parent.bottom
-    height: 28
-
-    Button
-      id: allButton
-      anchors.left: parent.left
-      anchors.top: parent.top
-      width: 84
-      height: 24
-      text: Todos
-
-    Button
-      id: clearButton
-      anchors.left: allButton.right
-      anchors.top: parent.top
-      margin-left: 6
-      width: 84
-      height: 24
-      text: Limpar
-
-    Button
-      id: confirmButton
-      anchors.left: clearButton.right
-      anchors.right: closeButton.left
-      anchors.top: parent.top
-      margin-left: 6
-      margin-right: 6
-      height: 24
-      text: Carregar liberados
-
-    Button
-      id: closeButton
-      anchors.right: parent.right
-      anchors.top: parent.top
-      width: 72
-      height: 24
-      text: Fechar
 ]])
   end)
 
@@ -2784,13 +1549,7 @@ jqmCreateWindow = function()
   if not jqmLoadManagerUi() or not UI or not UI.createWindow then return nil end
 
   local root = rootWidget or (g_ui.getRootWidget and g_ui.getRootWidget())
-  local okWindow, window = pcall(function() return UI.createWindow("DerpetsonControlWindow", root) end)
-  if not okWindow or not window then
-    okWindow, window = pcall(function() return UI.createWindow("DerpetsonControlWindow") end)
-  end
-  if not okWindow or not window then
-    okWindow, window = pcall(function() return UI.createWindow("DerpetsonScriptsWindow", root) end)
-  end
+  local okWindow, window = pcall(function() return UI.createWindow("DerpetsonScriptsWindow", root) end)
   if not okWindow or not window then
     okWindow, window = pcall(function() return UI.createWindow("DerpetsonScriptsWindow") end)
   end
@@ -2808,101 +1567,27 @@ jqmCreateWindow = function()
   if jqmWindowControl("allButton") then
     jqmWindowControl("allButton").onClick = function()
       jqmSetAllSelected(true)
+      jqmRequestOrLoad()
     end
   end
   if jqmWindowControl("clearButton") then
     jqmWindowControl("clearButton").onClick = function() jqmSetAllSelected(false) end
   end
-
-  for _, menu in ipairs(JQM_MENU_ITEMS) do
-    local button = jqmWindowControl(JQM_MENU_CONTROL_IDS[menu.id])
-    if button then
-      button.onClick = function()
-        jqmSelectView(menu.id, menu.module)
-        jqmRefreshManagerUi()
-      end
-    end
-  end
-
-  if jqmWindowControl("detailPrimary") then
-    jqmWindowControl("detailPrimary").onClick = function()
-      local scriptName = jqmCurrentModule()
-      if not scriptName then
-        jqmRequestOrLoad()
-        return
-      end
-      storage.JQMScriptManager.focus = scriptName
-      if jqmRuntimeLoaded[scriptName] == true then
-        jqmSetModuleEnabled(scriptName, not jqmModuleEnabled(scriptName))
-        jqmRefreshManagerUi()
-        return
-      end
-      jqmActivateSelected(scriptName)
-    end
-  end
-
-  if jqmWindowControl("detailSecondary") then
-    jqmWindowControl("detailSecondary").onClick = function()
-      local scriptName = jqmCurrentModule()
-      if scriptName and jqmRuntimeLoaded[scriptName] ~= true then
-        jqmActivateSelected(scriptName)
-      else
-        jqmRequestOrLoad()
-      end
-    end
-  end
-
-  if jqmWindowControl("detailAdvanced") then
-    jqmWindowControl("detailAdvanced").onClick = function()
-      local scriptName = jqmCurrentModule()
-      if not scriptName then
-        jqmSetAllSelected(false)
-        return
-      end
-      if jqmRuntimeLoaded[scriptName] == true and jqmOpenNativeSetup(scriptName) then return end
-      jqmWarn("setup avancado indisponivel: " .. jqmScriptLabel(scriptName))
-    end
-  end
-
-  for index = 1, 6 do
-    local edit = jqmWindowControl("configValue" .. tostring(index))
-    if edit then
-      edit.onTextChange = function(_, text)
-        if jqmUiSyncing then return end
-        local binding = jqmConfigRowBindings[index]
-        if not binding or not binding.field or binding.field.kind == "bool" then return end
-        jqmSetConfigValue(binding.scriptName, binding.field, jqmParseConfigValue(binding.field, text))
-      end
-    end
-    local action = jqmWindowControl("configAction" .. tostring(index))
-    if action then
-      action.onClick = function()
-        local binding = jqmConfigRowBindings[index]
-        if not binding or not binding.field then return end
-        local current = jqmConfigValue(binding.scriptName, binding.field)
-        if binding.field.kind == "bool" then
-          jqmSetConfigValue(binding.scriptName, binding.field, current ~= true)
-          jqmRefreshManagerUi()
-        end
-      end
-    end
-  end
-
   local function bindModuleCard(scriptName)
     local item = jqmScriptItem(scriptName)
     local prefix = JQM_CARD_PREFIX[scriptName]
     if not item or not prefix then return end
 
-    local function selectModule()
-      storage.JQMScriptManager.focus = scriptName
-      if scriptName == "combo" then
-        storage.JQMScriptManager.view = "combat"
-      elseif scriptName == "castle_manager" then
-        storage.JQMScriptManager.view = "castle"
-      elseif scriptName == "holiday_aoe" then
-        storage.JQMScriptManager.view = "defense"
+    local function loadModule()
+      jqmActivateSelected(scriptName)
+    end
+    local function setupOrLoadModule()
+      if jqmRuntimeLoaded[scriptName] == true then
+        if jqmOpenNativeSetup(scriptName) then return end
+        jqmWarn("setup nativo nao capturado: " .. jqmScriptLabel(scriptName))
+        return
       end
-      jqmRefreshManagerUi()
+      loadModule()
     end
     local function hoverModule(_, hovered)
       jqmUpdateModuleCard(item, hovered == true)
@@ -2911,20 +1596,27 @@ jqmCreateWindow = function()
     for _, suffix in ipairs({ "Card", "Icon", "Title", "Desc", "Badge" }) do
       local widget = jqmWindowControl(prefix .. suffix)
       if widget then
-        widget.onClick = selectModule
+        widget.onClick = loadModule
         widget.onHoverChange = hoverModule
       end
     end
 
     local gear = jqmWindowControl(prefix .. "Gear")
     if gear then
-      gear.onClick = selectModule
+      gear.onClick = setupOrLoadModule
       gear.onHoverChange = hoverModule
     end
 
     local loadButton = jqmWindowControl(prefix .. "Load")
     if loadButton then
-      loadButton.onClick = selectModule
+      loadButton.onClick = function()
+        if jqmRuntimeLoaded[scriptName] == true then
+          if jqmOpenNativeSetup(scriptName) then return end
+          jqmWarn("setup nativo nao capturado: " .. jqmScriptLabel(scriptName))
+          return
+        end
+        loadModule()
+      end
       loadButton.onHoverChange = hoverModule
     end
   end

@@ -15,7 +15,7 @@ local function jqmGlobals()
 end
 
 local jqmGlobal = jqmGlobals()
-local JQM_MANAGER_VERSION = 2026061230
+local JQM_MANAGER_VERSION = 2026061231
 if jqmGlobal.JQMScriptManagerVersion == JQM_MANAGER_VERSION and type(jqmGlobal.JQMOpenManager) == "function" then
   jqmGlobal.JQMOpenManager()
   return
@@ -172,6 +172,25 @@ local function jqmSetBackground(widget, color)
   elseif widget and widget.setImageColor then
     pcall(function() widget:setImageColor(color) end)
   end
+end
+
+local function jqmLoadChunk(source, chunkName)
+  local lastErr = nil
+  if type(loadstring) == "function" then
+    local ok, fn, err = pcall(loadstring, source, chunkName)
+    if ok and type(fn) == "function" then return fn, nil end
+    lastErr = ok and err or fn
+  end
+  if type(load) == "function" then
+    local ok, fn, err = pcall(load, source, chunkName)
+    if ok and type(fn) == "function" then return fn, nil end
+    lastErr = ok and err or fn
+
+    ok, fn, err = pcall(load, source)
+    if ok and type(fn) == "function" then return fn, nil end
+    lastErr = ok and err or fn
+  end
+  return nil, lastErr or "loadstring/load indisponivel"
 end
 
 local function jqmSetVisible(widget, visible)
@@ -819,29 +838,25 @@ local function jqmRunPayload(scriptName, data)
     jqmWarn("payload vazio")
     return false
   end
-  if data:sub(1, 1) == "{" then
-    if data:find("device_pending", 1, true) then
+  local responseStart = data:gsub("^%s+", "")
+  if responseStart:sub(1, 1) == "{" then
+    if responseStart:find("device_pending", 1, true) then
       jqmWarn(JQM_PENDING_MESSAGE)
-    elseif data:find("script_not_allowed", 1, true) then
+    elseif responseStart:find("script_not_allowed", 1, true) then
       jqmWarn("script ainda nao liberado para este MAC.")
     else
-      jqmWarn("servidor recusou: " .. data)
+      jqmWarn("servidor recusou: " .. responseStart:sub(1, 180))
     end
     return false
   end
 
-  local loader = loadstring or load
-  if not loader then
-    jqmWarn("loadstring/load indisponivel neste OTC")
-    return false
-  end
   if jqmRuntimeLoaded[scriptName] == true then
     jqmEnsureLoadedRow(scriptName)
     jqmSetManagerStatus("Ja carregado")
     jqmWarn("ja carregado: " .. jqmScriptLabel(scriptName))
     return true
   end
-  local fn, loadErr = loader(data, "@jqm_" .. tostring(scriptName) .. ".lua")
+  local fn, loadErr = jqmLoadChunk(data, "@jqm_" .. tostring(scriptName) .. ".lua")
   if not fn then
     jqmWarn("payload invalido: " .. tostring(loadErr))
     return false
@@ -898,6 +913,14 @@ local function jqmRequestOrLoad()
     if data:find('"ok":true', 1, true) or data:find('"ok": true', 1, true) then
       local allowed = jqmScriptsFromResponse(data)
       if #allowed == 0 then
+        local selected = jqmSelectedNames()
+        if #selected > 0 then
+          jqmSetManagerStatus("Tentando baixar selecionados...")
+          for _, scriptName in ipairs(selected) do
+            JQMLoadScript(scriptName)
+          end
+          return
+        end
         jqmSetManagerStatus("Nenhum selecionado liberado")
         jqmWarn("nenhum script liberado para este MAC.")
         return
@@ -937,6 +960,10 @@ jqmRequestSingle = function(scriptName)
 
     if data:find('"ok":true', 1, true) or data:find('"ok": true', 1, true) then
       local allowed = jqmScriptsFromResponse(data)
+      if #allowed == 0 then
+        JQMLoadScript(scriptName)
+        return
+      end
       for _, allowedName in ipairs(allowed) do
         if allowedName == scriptName then
           JQMLoadScript(scriptName)

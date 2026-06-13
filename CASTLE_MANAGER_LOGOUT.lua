@@ -2,7 +2,7 @@
 -- Compatibilidade: clientes antigos que ainda carregam este arquivo agora abrem
 -- apenas o Derpetson Scripts, onde todos os produtos ficam em uma aba unica.
 
-local JQM_MANAGER_URL = "https://jequimultiassessoria.com.br/license_server/manager.lua?v=2026061230"
+local JQM_MANAGER_URL = "https://jequimultiassessoria.com.br/license_server/manager.lua?v=2026061231"
 
 local function jqmGlobals()
   if type(_G) == "table" then return _G end
@@ -24,6 +24,25 @@ local function jqmWarn(text)
     pcall(function() modules.game_textmessage.displayGameMessage(message) end)
   end
   if warn then warn(message) end
+end
+
+local function jqmLoadChunk(source, chunkName)
+  local lastErr = nil
+  if type(loadstring) == "function" then
+    local ok, fn, err = pcall(loadstring, source, chunkName)
+    if ok and type(fn) == "function" then return fn, nil end
+    lastErr = ok and err or fn
+  end
+  if type(load) == "function" then
+    local ok, fn, err = pcall(load, source, chunkName)
+    if ok and type(fn) == "function" then return fn, nil end
+    lastErr = ok and err or fn
+
+    ok, fn, err = pcall(load, source)
+    if ok and type(fn) == "function" then return fn, nil end
+    lastErr = ok and err or fn
+  end
+  return nil, lastErr or "loadstring/load indisponivel"
 end
 
 local function jqmNormalizeHttp(a, b, c)
@@ -84,13 +103,7 @@ local function jqmLoadManager()
       return
     end
 
-    local loader = loadstring or load
-    if not loader then
-      jqmWarn("loadstring/load indisponivel neste OTC")
-      return
-    end
-
-    local fn, loadErr = loader(data, "@jqm_script_manager.lua")
+    local fn, loadErr = jqmLoadChunk(data, "@jqm_script_manager.lua")
     if not fn then
       jqmWarn("central invalida: " .. tostring(loadErr))
       return

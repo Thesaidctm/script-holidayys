@@ -1,8 +1,8 @@
 -- Derpetson Scripts launcher standalone.
 -- Entregue este arquivo ao cliente para abrir a central no OTC_BOT dele.
 
-local DERPETSON_LAUNCHER_VERSION = 2026061230
-local DERPETSON_MANAGER_URL = "https://jequimultiassessoria.com.br/license_server/manager.lua?v=2026061230"
+local DERPETSON_LAUNCHER_VERSION = 2026061231
+local DERPETSON_MANAGER_URL = "https://jequimultiassessoria.com.br/license_server/manager.lua?v=2026061231"
 
 local function derpGlobals()
   if type(_G) == "table" then return _G end
@@ -80,6 +80,25 @@ local function derpWarn(text)
   if warn then warn(message) end
 end
 
+local function derpLoadChunk(source, chunkName)
+  local lastErr = nil
+  if type(loadstring) == "function" then
+    local ok, fn, err = pcall(loadstring, source, chunkName)
+    if ok and type(fn) == "function" then return fn, nil end
+    lastErr = ok and err or fn
+  end
+  if type(load) == "function" then
+    local ok, fn, err = pcall(load, source, chunkName)
+    if ok and type(fn) == "function" then return fn, nil end
+    lastErr = ok and err or fn
+
+    ok, fn, err = pcall(load, source)
+    if ok and type(fn) == "function" then return fn, nil end
+    lastErr = ok and err or fn
+  end
+  return nil, lastErr or "loadstring/load indisponivel"
+end
+
 local function derpNormalizeHttp(a, b, c)
   if type(a) == "string" and #a > 0 then return a, nil end
   if type(b) == "string" and #b > 0 then return b, nil end
@@ -153,14 +172,7 @@ local function derpLoadManager()
       return
     end
 
-    local loader = loadstring or load
-    if not loader then
-      derpSetStatus("Sem loadstring")
-      derpWarn("loadstring/load indisponivel neste OTC")
-      return
-    end
-
-    local fn, loadErr = loader(data, "@derpetson_manager.lua")
+    local fn, loadErr = derpLoadChunk(data, "@derpetson_manager.lua")
     if not fn then
       derpSetStatus("Central invalida")
       derpWarn("central invalida: " .. tostring(loadErr))

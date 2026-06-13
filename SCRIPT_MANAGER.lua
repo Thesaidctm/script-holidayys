@@ -15,7 +15,7 @@ local function jqmGlobals()
 end
 
 local jqmGlobal = jqmGlobals()
-local JQM_MANAGER_VERSION = 2026061304
+local JQM_MANAGER_VERSION = 2026061305
 if jqmGlobal.JQMScriptManagerVersion == JQM_MANAGER_VERSION and type(jqmGlobal.JQMOpenManager) == "function" then
   jqmGlobal.JQMOpenManager()
   return
@@ -76,6 +76,7 @@ local jqmUiLoaded = false
 local jqmManagerTab = nil
 local jqmLoadedRows = {}
 local jqmNativeRows = {}
+local jqmNativeCandidates = {}
 local jqmNativeSetupButtons = {}
 local jqmNativeSetupActions = {}
 local jqmAllowedScripts = {}
@@ -89,6 +90,7 @@ local jqmLastTamperReport = {}
 local jqmCapturingScript = nil
 local jqmOpenManager = nil
 local jqmCreateWindow = nil
+local jqmRefreshManagerUi = nil
 local jqmScriptLabel = nil
 local jqmScriptItem = nil
 local jqmWarn = nil
@@ -386,15 +388,39 @@ local function jqmRegisterNativeSetupAction(scriptName, action, row)
   return true
 end
 
+local function jqmRememberNativeCandidate(scriptName, row)
+  if not scriptName or not row then return end
+  jqmNativeCandidates[scriptName] = jqmNativeCandidates[scriptName] or {}
+  for _, candidate in ipairs(jqmNativeCandidates[scriptName]) do
+    if candidate == row then return end
+  end
+  table.insert(jqmNativeCandidates[scriptName], row)
+  if not jqmNativeRows[scriptName] then
+    jqmNativeRows[scriptName] = row
+  end
+end
+
+local function jqmIsKnownNativeCandidate(scriptName, row)
+  local candidates = jqmNativeCandidates[scriptName]
+  if not candidates then return false end
+  for _, candidate in ipairs(candidates) do
+    if candidate == row then return true end
+  end
+  return false
+end
+
 jqmCaptureNativeSetup = function(scriptName, row, className)
   if not scriptName or not row then return false end
-  local button = jqmFindSetupButton(row)
-  if not button then return false end
   local belongsToScript = jqmCapturingScript == scriptName
+    or jqmIsKnownNativeCandidate(scriptName, row)
     or jqmNativeHostContains(scriptName, row)
     or jqmNativeClassMatches(scriptName, className)
     or jqmNativeWidgetMatches(scriptName, row, className)
   if not belongsToScript then return false end
+
+  jqmRememberNativeCandidate(scriptName, row)
+  local button = jqmFindSetupButton(row)
+  if not button then return false end
 
   jqmNativeRows[scriptName] = row
   jqmNativeSetupButtons[scriptName] = button
@@ -403,6 +429,13 @@ end
 
 local function jqmFindExistingNativeRow(scriptName)
   if jqmNativeRows[scriptName] and jqmNativeSetupButtons[scriptName] then return jqmNativeRows[scriptName] end
+
+  for _, candidate in ipairs(jqmNativeCandidates[scriptName] or {}) do
+    if jqmCaptureNativeSetup(scriptName, candidate) then
+      return jqmNativeRows[scriptName]
+    end
+  end
+
   local host = jqmNativeHost(scriptName)
   if not host then return nil end
 
@@ -427,6 +460,31 @@ local function jqmFindExistingNativeRow(scriptName)
   return nil
 end
 
+local function jqmRescanNativeSetup(scriptName)
+  if not scriptName then return false end
+  local found = jqmFindExistingNativeRow(scriptName)
+  if found and (jqmNativeSetupButtons[scriptName] or jqmNativeSetupActions[scriptName]) then
+    if type(jqmPrepareProxySetup) == "function" then
+      jqmPrepareProxySetup(scriptName)
+    end
+    if type(jqmRefreshManagerUi) == "function" then
+      jqmRefreshManagerUi()
+    end
+    return true
+  end
+  return false
+end
+
+local function jqmScheduleNativeRescan(scriptName)
+  jqmRescanNativeSetup(scriptName)
+  if type(schedule) ~= "function" then return end
+  for _, delay in ipairs({ 50, 250, 750, 1500 }) do
+    schedule(delay, function()
+      jqmRescanNativeSetup(scriptName)
+    end)
+  end
+end
+
 local function jqmOpenNativeSetup(scriptName)
   local action = jqmNativeSetupActions[scriptName]
   if type(action) == "function" then
@@ -435,7 +493,7 @@ local function jqmOpenNativeSetup(scriptName)
     return ok
   end
   if not jqmNativeSetupButtons[scriptName] then
-    jqmFindExistingNativeRow(scriptName)
+    jqmRescanNativeSetup(scriptName)
   end
   local button = jqmNativeSetupButtons[scriptName]
   if button and type(button.onClick) == "function" then
@@ -449,6 +507,9 @@ local function jqmOpenNativeSetup(scriptName)
   if button and type(button.onMousePress) == "function" then
     pcall(function() button.onMousePress(button) end)
     return true
+  end
+  if button then
+    jqmScheduleNativeRescan(scriptName)
   end
   return false
 end
@@ -702,7 +763,7 @@ local function jqmUpdateModuleCard(item, hover)
   jqmSetBackground(card, bgColor)
 end
 
-local function jqmRefreshManagerUi()
+jqmRefreshManagerUi = function()
   for _, item in ipairs(JQM_SCRIPTS) do
     jqmUpdateModuleCard(item, false)
     if jqmRuntimeLoaded[item.name] == true then
@@ -1096,7 +1157,10 @@ local function jqmRunInManagerTab(scriptName, fn)
   local function forcedSetupUI(ui, targetParent)
     if type(originalSetupUI) ~= "function" then return nil end
     local row = originalSetupUI(ui, targetParent or nativeHost or parent)
-    if row then jqmMarkNativeReady(scriptName, row) end
+    if row then
+      jqmRememberNativeCandidate(scriptName, row)
+      jqmMarkNativeReady(scriptName, row)
+    end
     return row
   end
 
@@ -1108,7 +1172,13 @@ local function jqmRunInManagerTab(scriptName, fn)
       end
       local widget = originalCreateWidget(className, finalParent, ...)
       if widget then
-        jqmMarkNativeReady(scriptName, widget, className)
+        local shouldTrack = jqmNativeClassMatches(scriptName, className)
+          or finalParent == nativeHost
+          or finalParent == parent
+        if shouldTrack then
+          jqmRememberNativeCandidate(scriptName, widget)
+          jqmMarkNativeReady(scriptName, widget, className)
+        end
       end
       return widget
     end
@@ -1172,6 +1242,9 @@ local function jqmRunInManagerTab(scriptName, fn)
   jqmTamperPaused = true
   jqmCapturingScript = scriptName
   local ok, err = pcall(fn)
+  if ok then
+    jqmRescanNativeSetup(scriptName)
+  end
   jqmCapturingScript = nil
   jqmTamperPaused = false
 
@@ -1247,6 +1320,7 @@ local function jqmRunPayload(scriptName, data)
   jqmRuntimeLoaded[scriptName] = true
   storage.JQMScriptManager.loaded[scriptName] = true
   jqmEnsureLoadedRow(scriptName)
+  jqmScheduleNativeRescan(scriptName)
   jqmSetManagerStatus(jqmMainSummary())
   jqmWarn("carregado: " .. jqmScriptLabel(scriptName))
   return true

@@ -1,7 +1,7 @@
 -- Derpetson Scripts central bridge.
 -- Ponto fixo para abrir a central mesmo sem carregar um produto especifico.
 
-local JQM_MANAGER_URL = "https://jequimultiassessoria.com.br/license_server/manager.lua?v=2026061232"
+local JQM_MANAGER_URL = "https://jequimultiassessoria.com.br/license_server/manager.lua?v=2026061233"
 
 local function jqmGlobals()
   if type(_G) == "table" then return _G end
@@ -127,6 +127,14 @@ local function jqmLoadManager()
 end
 
 local function jqmEnsureBridgeLauncher()
+  if jqmGlobal.DerpetsonLauncherRow then
+    jqmGlobal.JQMScriptManagerBridgeLauncher = jqmGlobal.DerpetsonLauncherRow
+    return
+  end
+  if jqmGlobal.JQMScriptManagerLauncher then
+    jqmGlobal.JQMScriptManagerBridgeLauncher = jqmGlobal.JQMScriptManagerLauncher
+    return
+  end
   if jqmGlobal.JQMScriptManagerBridgeLauncher then return end
   if type(setupUI) ~= "function" then return end
   local ok, row = pcall(function()

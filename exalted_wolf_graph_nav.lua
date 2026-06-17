@@ -10,7 +10,7 @@
 --   EWOLFCANCEL|ID|reason
 -- ============================================================
 
-local EW_GRAPH_SCRIPT_VERSION = 2026061702
+local EW_GRAPH_SCRIPT_VERSION = 2026061703
 local EW_GRAPH_SCRIPT_NAME = "exalted_wolf_graph_nav.lua"
 local EW_GRAPH_LOAD_KEY = "ExaltedWolfGraphNavLoaded_" .. tostring(configName or botConfigName or "default")
 if _G and _G[EW_GRAPH_LOAD_KEY] == true then return end
@@ -22,13 +22,70 @@ local PANEL_NAME = "exalted_wolf_graph_nav"
 storage[PANEL_NAME] = storage[PANEL_NAME] or {}
 local settings = storage[PANEL_NAME]
 
+local function ewTrimText(text)
+  text = tostring(text or ""):gsub("%s+", " ")
+  return text:gsub("^%s+", ""):gsub("%s+$", "")
+end
+
+local function ewParseNames(text)
+  local list = {}
+  local seen = {}
+  for rawName in tostring(text or ""):gmatch("[^,;|\n]+") do
+    local name = ewTrimText(rawName)
+    local key = name:lower()
+    if key ~= "" and not seen[key] then
+      table.insert(list, name)
+      seen[key] = true
+    end
+  end
+  return list
+end
+
+local function ewNamesToText(list)
+  if type(list) ~= "table" then return "" end
+  local names = {}
+  local seen = {}
+  for _, rawName in ipairs(list) do
+    local name = ewTrimText(rawName)
+    local key = name:lower()
+    if key ~= "" and not seen[key] then
+      table.insert(names, name)
+      seen[key] = true
+    end
+  end
+  return table.concat(names, ", ")
+end
+
+local function ewComboLeadersText()
+  local combo = type(storage.ComboSystem_MultiLideres) == "table" and storage.ComboSystem_MultiLideres or nil
+  local oldCombo = type(storage.Combo) == "table" and storage.Combo or nil
+
+  local text = combo and ewNamesToText(combo.leaderList) or ""
+  if text == "" and combo and combo.callersText then text = ewTrimText(combo.callersText) end
+  if text == "" and oldCombo then text = ewNamesToText(oldCombo.leaderList) end
+  if text == "" and storage.comboLeader then text = ewTrimText(storage.comboLeader) end
+
+  return text
+end
+
+local function ewSetComboLeaders(text)
+  local list = ewParseNames(text)
+  storage.ComboSystem_MultiLideres = storage.ComboSystem_MultiLideres or {}
+  storage.ComboSystem_MultiLideres.leaderList = list
+  storage.ComboSystem_MultiLideres.callersText = ewNamesToText(list)
+  return storage.ComboSystem_MultiLideres.callersText
+end
+
+local comboDefaultLeaders = ewComboLeadersText()
+
 local defaults = {
   enabled = true,
   detectorEnabled = true,
   leaderEnabled = true,
   debug = true,
   cfgPath = "cavebot_configs/1Wolf.cfg",
-  leaders = storage.exaltedWolfLeaders or "Landin, Pipoko",
+  leaders = comboDefaultLeaders ~= "" and comboDefaultLeaders or storage.exaltedWolfLeaders or "Landin, Pipoko",
+  syncComboLeaders = true,
   nearLinkRange = 7,
   transitionCost = 35,
   useCost = 8,
@@ -59,6 +116,29 @@ local defaults = {
 for key, value in pairs(defaults) do
   if settings[key] == nil then settings[key] = value end
 end
+
+local function setLeaderText(text, updateCombo)
+  local cleaned = ewNamesToText(ewParseNames(text))
+  settings.leaders = cleaned
+  storage.exaltedWolfLeaders = cleaned
+  if updateCombo == true then
+    settings.lastComboLeadersText = ewSetComboLeaders(cleaned)
+  end
+  return cleaned
+end
+
+local function syncLeadersFromCombo(force)
+  if settings.syncComboLeaders ~= true then return tostring(settings.leaders or "") end
+  local comboText = ewComboLeadersText()
+  if comboText == "" then return tostring(settings.leaders or "") end
+  if force == true or comboText ~= settings.lastComboLeadersText or tostring(settings.leaders or "") == "" then
+    setLeaderText(comboText, false)
+    settings.lastComboLeadersText = comboText
+  end
+  return tostring(settings.leaders or "")
+end
+
+syncLeadersFromCombo(true)
 
 local EW = {
   graph = nil,
@@ -242,6 +322,7 @@ local function findExaltedWolf()
 end
 
 local function parseLeaders()
+  syncLeadersFromCombo(false)
   local leaders = {}
   local text = tostring(settings.leaders or "")
   for name in text:gmatch("([^,;]+)") do
@@ -265,17 +346,7 @@ local function sendGuild(text)
     if ok then return true end
   end
 
-  if g_game and g_game.talkChannel and TalkTypes then
-    local talkType = TalkTypes.ChannelYellow or TalkTypes.ChannelOrange or 7
-    local ok = pcall(function() g_game.talkChannel(talkType, 0, text) end)
-    if ok then return true end
-  end
-
-  if type(say) == "function" then
-    local ok = pcall(function() say(text) end)
-    if ok then return true end
-  end
-
+  warnMessage("guildsay indisponivel; nao enviei no chat comum: " .. text)
   return false
 end
 
@@ -1603,17 +1674,9 @@ end
 if UI and UI.Separator then UI.Separator() end
 if UI and UI.Label then UI.Label("EW Graph Nav") end
 if addTextEdit then
+  if UI and UI.Label then UI.Label("Lideres Exalted Wolf") end
   addTextEdit("ewGraphLeaders", tostring(settings.leaders or ""), function(widget, text)
-    settings.leaders = text
-    storage.exaltedWolfLeaders = text
-  end)
-
-  addTextEdit("ewGraphUpdateUrl", tostring(settings.updateUrl or ""), function(widget, text)
-    settings.updateUrl = text
-  end)
-
-  addTextEdit("ewGraphScriptPath", tostring(settings.scriptPath or EW_GRAPH_SCRIPT_NAME), function(widget, text)
-    settings.scriptPath = text
+    setLeaderText(text, true)
   end)
 end
 
@@ -1665,12 +1728,20 @@ EWGraphNav = {
     settings.scriptPath = tostring(path or "")
     return settings.scriptPath
   end,
+  setLeaders = function(text)
+    settings.syncComboLeaders = true
+    return setLeaderText(text, true)
+  end,
+  syncLeaders = function()
+    return syncLeadersFromCombo(true)
+  end,
   status = function()
     return {
       version = EW_GRAPH_SCRIPT_VERSION,
       updateUrl = settings.updateUrl,
       scriptPath = settings.scriptPath,
       autoUpdateEnabled = settings.autoUpdateEnabled,
+      syncComboLeaders = settings.syncComboLeaders,
       lastRemoteVersion = settings.lastRemoteVersion,
       cfgLoaded = EW.cfgLoaded,
       nodes = EW.graph and #EW.graph.nodes or 0,

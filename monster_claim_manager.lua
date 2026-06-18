@@ -12,7 +12,7 @@
 if type(setDefaultTab) == "function" then setDefaultTab("Tools") end
 storage = storage or {}
 
-local MONSTER_CLAIM_MANAGER_VERSION = 2026061802
+local MONSTER_CLAIM_MANAGER_VERSION = 2026061804
 local MONSTER_CLAIM_MANAGER_URL = "https://raw.githubusercontent.com/Thesaidctm/script-holidayys/main/monster_claim_manager.lua"
 local MONSTER_CLAIM_MANAGER_FILE = "monster_claim_manager.lua"
 
@@ -38,12 +38,12 @@ CONFIG = {
     "NomeKiller4"
   },
 
-  hunterSendInterval = 3000,
+  hunterSendInterval = 1000,
   monsterLostTimeout = 5000,
   hunterAttackOtherMonsters = true,
   useMonsterPosition = true,
 
-  claimWaitTime = 2000,
+  claimWaitTime = 500,
   killerSignalTimeout = 15000,
   arriveDistance = 3,
   newOccurrenceDistance = 5,
@@ -53,15 +53,14 @@ CONFIG = {
   noPathPenalty = 500,
   transitionActionPenalty = 10,
   findPathMaxDistance = 120,
-  directWalkInterval = 700,
-  transitionWalkInterval = 700,
-  transitionActionInterval = 1200,
-  transitionReachDistance = 1,
-  stuckTimeout = 3500,
+  directWalkInterval = 250,
+  transitionWalkInterval = 300,
+  transitionActionInterval = 800,
+  transitionReachDistance = 0,
+  stuckTimeout = 2200,
   stuckMinProgress = 1,
-  ignoreDirectAfterStuckMs = 5000,
+  ignoreDirectAfterStuckMs = 2500,
 
-  useCfgAsMapReference = true,
   useCaveBotLabels = false,
 
   debug = true,
@@ -69,28 +68,62 @@ CONFIG = {
   debugNavigation = true
 }
 
--- TRANSITIONS e uma malha editavel. Nao e rota fixa obrigatoria.
--- Preencha com escadas, buracos, rampas, passagens, levitate, etc.
 TRANSITIONS = {
-  -- {
-  --   name = "Escada exemplo",
-  --   from = {x = 100, y = 100, z = 7},
-  --   to   = {x = 100, y = 100, z = 6},
-  --   action = "walk"
-  -- },
-  -- {
-  --   name = "Buraco exemplo",
-  --   from = {x = 120, y = 130, z = 6},
-  --   to   = {x = 120, y = 130, z = 7},
-  --   action = "use"
-  -- },
-  -- {
-  --   name = "Levitate exemplo",
-  --   from = {x = 130, y = 140, z = 7},
-  --   to   = {x = 130, y = 140, z = 6},
-  --   action = "say",
-  --   words = "Exani Hur Up"
-  -- }
+  { name = "1Wolf 1", from = {x = 54720, y = 54806, z = 7}, to = {x = 54714, y = 54805, z = 6}, action = "walk" },
+  { name = "1Wolf 2", from = {x = 54694, y = 54796, z = 6}, to = {x = 54694, y = 54796, z = 7}, action = "walk" },
+  { name = "1Wolf 3", from = {x = 54694, y = 54796, z = 7}, to = {x = 54692, y = 54802, z = 6}, action = "walk" },
+  { name = "1Wolf 4", from = {x = 54692, y = 54802, z = 6}, to = {x = 54689, y = 54808, z = 5}, action = "walk" },
+  { name = "1Wolf 5", from = {x = 54689, y = 54808, z = 5}, to = {x = 54690, y = 54813, z = 4}, action = "walk" },
+  { name = "1Wolf 6", from = {x = 54690, y = 54813, z = 4}, to = {x = 54693, y = 54813, z = 5}, action = "walk" },
+  { name = "1Wolf 7", from = {x = 54693, y = 54813, z = 5}, to = {x = 54699, y = 54818, z = 6}, action = "walk" },
+  { name = "1Wolf 8", from = {x = 54700, y = 54803, z = 6}, to = {x = 54699, y = 54803, z = 7}, action = "walk" },
+  { name = "1Wolf 9", from = {x = 54699, y = 54803, z = 7}, to = {x = 54705, y = 54803, z = 6}, action = "walk" },
+  { name = "1Wolf 10", from = {x = 54720, y = 54806, z = 6}, to = {x = 54726, y = 54806, z = 7}, action = "walk" },
+  { name = "1Wolf 11", from = {x = 54784, y = 54779, z = 7}, to = {x = 54782, y = 54779, z = 6}, action = "walk" },
+  { name = "1Wolf 12", from = {x = 54784, y = 54779, z = 6}, to = {x = 54788, y = 54773, z = 7}, action = "walk" },
+  { name = "1Wolf 13", from = {x = 54794, y = 54753, z = 7}, to = {x = 54794, y = 54751, z = 6}, action = "walk" },
+  { name = "1Wolf 14", from = {x = 54794, y = 54753, z = 6}, to = {x = 54794, y = 54759, z = 7}, action = "walk" },
+  { name = "1Wolf 15", from = {x = 54799, y = 54774, z = 7}, to = {x = 54800, y = 54771, z = 6}, action = "walk" },
+  { name = "1Wolf 16", from = {x = 54799, y = 54774, z = 6}, to = {x = 54805, y = 54776, z = 7}, action = "walk" },
+  { name = "1Wolf 17", from = {x = 54817, y = 54771, z = 7}, to = {x = 54816, y = 54766, z = 6}, action = "walk" },
+  { name = "1Wolf 18", from = {x = 54817, y = 54771, z = 6}, to = {x = 54823, y = 54771, z = 7}, action = "walk" },
+  { name = "1Wolf 19", from = {x = 54799, y = 54786, z = 7}, to = {x = 54793, y = 54789, z = 6}, action = "walk" },
+  { name = "1Wolf 20", from = {x = 54799, y = 54786, z = 6}, to = {x = 54805, y = 54791, z = 7}, action = "walk" },
+  { name = "1Wolf 21", from = {x = 54823, y = 54793, z = 7}, to = {x = 54818, y = 54790, z = 6}, action = "walk" },
+  { name = "1Wolf 22", from = {x = 54818, y = 54790, z = 6}, to = {x = 54818, y = 54790, z = 5}, action = "walk" },
+  { name = "1Wolf 23", from = {x = 54818, y = 54790, z = 5}, to = {x = 54823, y = 54793, z = 6}, action = "walk" },
+  { name = "1Wolf 24", from = {x = 54823, y = 54793, z = 6}, to = {x = 54824, y = 54799, z = 7}, action = "walk" },
+  { name = "1Wolf 25", from = {x = 54785, y = 54827, z = 7}, to = {x = 54785, y = 54821, z = 6}, action = "walk" },
+  { name = "1Wolf 26", from = {x = 54780, y = 54812, z = 6}, to = {x = 54782, y = 54812, z = 5}, action = "walk" },
+  { name = "1Wolf 27", from = {x = 54782, y = 54812, z = 5}, to = {x = 54783, y = 54811, z = 4}, action = "walk" },
+  { name = "1Wolf 28", from = {x = 54783, y = 54811, z = 4}, to = {x = 54780, y = 54811, z = 5}, action = "walk" },
+  { name = "1Wolf 29", from = {x = 54780, y = 54811, z = 5}, to = {x = 54782, y = 54817, z = 6}, action = "walk" },
+  { name = "1Wolf 30", from = {x = 54785, y = 54827, z = 6}, to = {x = 54791, y = 54832, z = 7}, action = "walk" },
+  { name = "1Wolf 31", from = {x = 54791, y = 54842, z = 7}, to = {x = 54785, y = 54840, z = 6}, action = "walk" },
+  { name = "1Wolf 32", from = {x = 54782, y = 54843, z = 6}, to = {x = 54778, y = 54844, z = 5}, action = "walk" },
+  { name = "1Wolf 33", from = {x = 54778, y = 54844, z = 5}, to = {x = 54777, y = 54843, z = 4}, action = "walk" },
+  { name = "1Wolf 34", from = {x = 54777, y = 54843, z = 4}, to = {x = 54777, y = 54843, z = 3}, action = "walk" },
+  { name = "1Wolf 35", from = {x = 54777, y = 54843, z = 3}, to = {x = 54778, y = 54844, z = 4}, action = "walk" },
+  { name = "1Wolf 36", from = {x = 54778, y = 54844, z = 4}, to = {x = 54782, y = 54843, z = 5}, action = "walk" },
+  { name = "1Wolf 37", from = {x = 54782, y = 54843, z = 5}, to = {x = 54788, y = 54841, z = 6}, action = "walk" },
+  { name = "1Wolf 38", from = {x = 54791, y = 54842, z = 6}, to = {x = 54795, y = 54848, z = 7}, action = "walk" },
+  { name = "1Wolf 39", from = {x = 54806, y = 54847, z = 7}, to = {x = 54812, y = 54850, z = 6}, action = "walk" },
+  { name = "1Wolf 40", from = {x = 54814, y = 54855, z = 6}, to = {x = 54820, y = 54860, z = 7}, action = "walk" },
+  { name = "1Wolf 41", from = {x = 54814, y = 54855, z = 7}, to = {x = 54809, y = 54849, z = 6}, action = "walk" },
+  { name = "1Wolf 42", from = {x = 54806, y = 54847, z = 6}, to = {x = 54800, y = 54847, z = 7}, action = "walk" },
+  { name = "1Wolf 43", from = {x = 54794, y = 54866, z = 7}, to = {x = 54788, y = 54865, z = 6}, action = "walk" },
+  { name = "1Wolf 44", from = {x = 54794, y = 54866, z = 6}, to = {x = 54798, y = 54872, z = 7}, action = "walk" },
+  { name = "1Wolf 45", from = {x = 54663, y = 54879, z = 7}, to = {x = 54662, y = 54885, z = 6}, action = "walk" },
+  { name = "1Wolf 46", from = {x = 54654, y = 54890, z = 6}, to = {x = 54654, y = 54890, z = 5}, action = "walk" },
+  { name = "1Wolf 47", from = {x = 54654, y = 54890, z = 5}, to = {x = 54660, y = 54888, z = 6}, action = "walk" },
+  { name = "1Wolf 48", from = {x = 54663, y = 54879, z = 6}, to = {x = 54657, y = 54875, z = 7}, action = "walk" },
+  { name = "1Wolf 49", from = {x = 54694, y = 54847, z = 7}, to = {x = 54700, y = 54845, z = 6}, action = "walk" },
+  { name = "1Wolf 50", from = {x = 54714, y = 54844, z = 6}, to = {x = 54715, y = 54850, z = 7}, action = "walk" },
+  { name = "1Wolf 51", from = {x = 54725, y = 54799, z = 7}, to = {x = 54725, y = 54796, z = 6}, action = "walk" },
+  { name = "1Wolf 52", from = {x = 54725, y = 54796, z = 6}, to = {x = 54725, y = 54790, z = 7}, action = "walk" },
+  { name = "1Wolf 53", from = {x = 54696, y = 54771, z = 7}, to = {x = 54695, y = 54771, z = 6}, action = "walk" },
+  { name = "1Wolf 54", from = {x = 54695, y = 54771, z = 6}, to = {x = 54701, y = 54774, z = 7}, action = "walk" },
+  { name = "1Wolf 55", from = {x = 54725, y = 54796, z = 7}, to = {x = 54725, y = 54799, z = 6}, action = "walk" }
 }
 
 local STORAGE_KEY = "monster_claim_manager"
@@ -1167,6 +1200,7 @@ local function startKillerAssignment(occ, assignedDistance)
   setCaveBot(false)
   setTargetBot(true)
   logInfo("Killer assumiu " .. occ.monsterName .. " em " .. posText(occ.pos) .. " dist=" .. tostring(assignedDistance))
+  navigateToActive()
 end
 
 local function processPendingDecisions()

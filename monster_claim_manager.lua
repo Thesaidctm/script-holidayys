@@ -12,7 +12,7 @@
 if type(setDefaultTab) == "function" then setDefaultTab("Tools") end
 storage = storage or {}
 
-local MONSTER_CLAIM_MANAGER_VERSION = 2026061804
+local MONSTER_CLAIM_MANAGER_VERSION = 2026061805
 local MONSTER_CLAIM_MANAGER_URL = "https://raw.githubusercontent.com/Thesaidctm/script-holidayys/main/monster_claim_manager.lua"
 local MONSTER_CLAIM_MANAGER_FILE = "monster_claim_manager.lua"
 
@@ -125,6 +125,8 @@ TRANSITIONS = {
   { name = "1Wolf 54", from = {x = 54695, y = 54771, z = 6}, to = {x = 54701, y = 54774, z = 7}, action = "walk" },
   { name = "1Wolf 55", from = {x = 54725, y = 54796, z = 7}, to = {x = 54725, y = 54799, z = 6}, action = "walk" }
 }
+
+ROUTE_MAP_TEXT = "54725,54801,7;54720,54806,7,0;54714,54805,6;54708,54804,6;54702,54802,6;54696,54801,6;54694,54796,6,0;54694,54796,7,0;54692,54802,6;54692,54802,6,0;54689,54808,5;54689,54808,5,0;54690,54813,4,0;54693,54813,5,0;54699,54818,6;54705,54817,6;54711,54813,6;54715,54807,6;54709,54804,6;54703,54802,6;54700,54803,6,0;54699,54803,7,0;54705,54803,6;54711,54804,6;54717,54804,6;54720,54806,6,0;54726,54806,7;54732,54805,7;54738,54804,7;54744,54804,7;54750,54804,7;54756,54802,7;54762,54802,7;54768,54803,7;54774,54802,7;54774,54796,7;54775,54790,7;54774,54784,7;54771,54778,7;54771,54772,7;54777,54768,7;54783,54769,7;54788,54775,7;54784,54779,7,0;54782,54779,6;54784,54779,6,0;54788,54773,7;54788,54767,7;54793,54761,7;54794,54755,7;54794,54753,7,0;54794,54751,6;54794,54753,6,0;54794,54759,7;54792,54765,7;54791,54771,7;54792,54777,7;54798,54775,7;54799,54774,7,0;54800,54771,6;54799,54774,6,0;54805,54776,7;54811,54775,7;54817,54774,7;54817,54771,7,0;54816,54766,6;54817,54771,6,0;54823,54771,7;54829,54769,7;54829,54775,7;54825,54781,7;54819,54782,7;54813,54783,7;54809,54789,7;54803,54786,7;54799,54786,7,0;54793,54789,6;54799,54788,6;54799,54786,6,0;54805,54791,7;54807,54797,7;54813,54800,7;54819,54800,7;54823,54794,7;54823,54793,7,0;54818,54790,6,0;54818,54790,5,0;54823,54793,6,0;54824,54799,7;54818,54800,7;54812,54800,7;54806,54803,7;54800,54803,7;54794,54802,7;54789,54808,7;54795,54813,7;54801,54815,7;54806,54821,7;54805,54827,7;54799,54830,7;54793,54830,7;54787,54829,7;54785,54827,7,0;54785,54821,6;54782,54815,6;54780,54812,6,0;54782,54812,5,0;54783,54811,4,0;54780,54811,5,0;54782,54817,6;54784,54823,6;54785,54827,6,0;54791,54832,7;54793,54838,7;54791,54842,7,0;54785,54840,6;54782,54843,6,0;54778,54844,5,0;54777,54843,4,0;54777,54843,3,0;54778,54844,4,0;54782,54843,5,0;54788,54841,6;54791,54842,6,0;54795,54848,7;54801,54850,7;54806,54847,7,0;54812,54850,6;54814,54855,6,0;54820,54860,7;54814,54858,7;54814,54855,7,0;54809,54849,6;54806,54847,6,0;54800,54847,7;54798,54853,7;54798,54859,7;54798,54865,7;54794,54866,7,0;54788,54865,6;54794,54866,6;54794,54866,6,0;54798,54872,7;54798,54878,7;54792,54875,7;54786,54875,7;54780,54875,7;54774,54876,7;54768,54879,7;54767,54885,7;54762,54891,7;54756,54892,7;54750,54896,7;54744,54898,7;54739,54904,7;54735,54910,7;54729,54914,7;54728,54920,7;54734,54925,7;54734,54919,7;54730,54913,7;54724,54912,7;54718,54914,7;54712,54919,7;54706,54919,7;54705,54925,7;54704,54919,7;54705,54913,7;54705,54907,7;54702,54901,7;54696,54897,7;54690,54896,7;54684,54895,7;54678,54892,7;54672,54887,7;54671,54881,7;54665,54877,7;54663,54879,7,0;54662,54885,6;54656,54889,6;54654,54890,6,0;54654,54890,5,0;54660,54888,6;54662,54882,6;54663,54879,6,0;54657,54875,7;54653,54869,7;54647,54869,7;54641,54871,7;54635,54870,7;54629,54870,7;54635,54870,7;54641,54871,7;54647,54870,7;54653,54869,7;54658,54863,7;54664,54863,7;54663,54857,7;54659,54851,7;54665,54852,7;54671,54848,7;54673,54842,7;54678,54848,7;54680,54854,7;54686,54854,7;54692,54855,7;54694,54849,7;54694,54847,7,0;54700,54845,6;54706,54845,6;54712,54844,6;54714,54844,6,0;54715,54850,7;54709,54851,7;54715,54848,7;54721,54848,7;54722,54842,7;54723,54836,7;54718,54830,7;54720,54824,7;54721,54818,7;54725,54812,7;54725,54806,7;54725,54800,7;54725,54799,7,0;54725,54796,6,0;54725,54790,7;54724,54784,7;54730,54781,7;54736,54781,7;54741,54787,7;54736,54781,7;54730,54780,7;54724,54781,7;54718,54781,7;54712,54781,7;54706,54780,7;54700,54775,7;54695,54771,7;54696,54771,7,0;54695,54771,6,0;54701,54774,7;54707,54779,7;54713,54779,7;54719,54781,7;54724,54787,7;54725,54793,7;54725,54796,7,0;54725,54799,6,0"
 
 local STORAGE_KEY = "monster_claim_manager"
 storage[STORAGE_KEY] = storage[STORAGE_KEY] or {}
@@ -804,11 +806,226 @@ local function hasDirectPath(fromPos, toPos)
   return false
 end
 
+local autoWalkTo
+local performTransitionAction
+local routeGraph = nil
+
+local function routeNodePos(node)
+  if not node then return nil end
+  return { x = node.x, y = node.y, z = node.z }
+end
+
+local function addRouteEdge(edges, fromIndex, toIndex, cost)
+  edges[fromIndex] = edges[fromIndex] or {}
+  table.insert(edges[fromIndex], { to = toIndex, cost = cost })
+end
+
+local function buildRouteGraph()
+  if routeGraph then return routeGraph end
+
+  local nodes = {}
+  for token in tostring(ROUTE_MAP_TEXT or ""):gmatch("[^;]+") do
+    local x, y, z, flag = token:match("(%-?%d+),(%-?%d+),(%-?%d+),?(%d*)")
+    if x then
+      table.insert(nodes, {
+        index = #nodes + 1,
+        x = tonumber(x),
+        y = tonumber(y),
+        z = tonumber(z),
+        transition = flag == "0"
+      })
+    end
+  end
+
+  local edges = {}
+  for index = 1, #nodes - 1 do
+    local a = nodes[index]
+    local b = nodes[index + 1]
+
+    if a.z == b.z then
+      local cost = math.max(1, distance2d(a, b))
+      addRouteEdge(edges, index, index + 1, cost)
+      addRouteEdge(edges, index + 1, index, cost)
+    elseif a.transition == true then
+      local cost = CONFIG.transitionActionPenalty + math.abs(a.z - b.z) * CONFIG.floorPenalty + distance2d(a, b)
+      addRouteEdge(edges, index, index + 1, cost)
+    end
+  end
+
+  routeGraph = { nodes = nodes, edges = edges }
+  return routeGraph
+end
+
+local function nearestRouteNode(pos, preferReachable)
+  if not pos then return nil end
+
+  local graph = buildRouteGraph()
+  local best = nil
+  local bestScore = nil
+
+  for _, node in ipairs(graph.nodes or {}) do
+    if node.z == pos.z then
+      local nodePos = routeNodePos(node)
+      local dist = distance2d(pos, nodePos)
+      local reachable = dist <= CONFIG.arriveDistance or hasDirectPath(pos, nodePos)
+      local score = dist
+
+      if preferReachable == true and not reachable then
+        score = score + CONFIG.noPathPenalty
+      end
+
+      if not bestScore or score < bestScore then
+        best = node
+        bestScore = score
+      end
+    end
+  end
+
+  return best, bestScore
+end
+
+local function findRoutePath(startIndex, goalIndex)
+  local graph = buildRouteGraph()
+  if not startIndex or not goalIndex then return nil end
+
+  local dist = {}
+  local prev = {}
+  local visited = {}
+  dist[startIndex] = 0
+
+  while true do
+    local current = nil
+    local currentDist = nil
+
+    for index, value in pairs(dist) do
+      if not visited[index] and (not currentDist or value < currentDist) then
+        current = index
+        currentDist = value
+      end
+    end
+
+    if not current then break end
+    if current == goalIndex then break end
+
+    visited[current] = true
+    for _, edge in ipairs(graph.edges[current] or {}) do
+      local nextDist = currentDist + edge.cost
+      if dist[edge.to] == nil or nextDist < dist[edge.to] then
+        dist[edge.to] = nextDist
+        prev[edge.to] = current
+      end
+    end
+  end
+
+  if startIndex ~= goalIndex and not prev[goalIndex] then return nil end
+
+  local indexes = {}
+  local cursor = goalIndex
+  while cursor do
+    table.insert(indexes, 1, cursor)
+    if cursor == startIndex then break end
+    cursor = prev[cursor]
+  end
+
+  local nodes = {}
+  for _, index in ipairs(indexes) do
+    table.insert(nodes, graph.nodes[index])
+  end
+
+  return nodes, dist[goalIndex] or 0
+end
+
+local function planRouteToActive(active, me)
+  if not active or not me then return false end
+
+  local startNode = nearestRouteNode(me, true)
+  local goalNode = nearestRouteNode(active.pos, false)
+  if not startNode or not goalNode then
+    navInfo("Mapa embutido sem node compativel para origem/destino.")
+    return false
+  end
+
+  local nodes, cost = findRoutePath(startNode.index, goalNode.index)
+  if not nodes or #nodes == 0 then
+    navInfo("Mapa embutido sem rota entre nodes " .. tostring(startNode.index) .. " e " .. tostring(goalNode.index))
+    return false
+  end
+
+  active.routeNodes = nodes
+  active.routeIndex = 1
+  active.routeTarget = posText(active.pos)
+  active.nextRouteWalkAt = 0
+  navInfo("Rota embutida calculada: " .. tostring(#nodes) .. " nodes custo=" .. tostring(cost))
+  return true
+end
+
+local function followEmbeddedRoute(active, me, tm)
+  if not active or not me then return false end
+
+  if active.routeTarget ~= posText(active.pos) or not active.routeNodes then
+    if not planRouteToActive(active, me) then return false end
+  end
+
+  local node = active.routeNodes[active.routeIndex]
+  if not node then
+    if me.z == active.pos.z then
+      if tm >= (active.nextRouteWalkAt or 0) then
+        active.nextRouteWalkAt = tm + CONFIG.directWalkInterval
+        navInfo("Fim da rota embutida. Indo ao alvo exato " .. posText(active.pos))
+        autoWalkTo(active.pos)
+      end
+      return true
+    end
+    active.routeNodes = nil
+    return false
+  end
+
+  local nodePos = routeNodePos(node)
+  local reachDistance = node.transition == true and 0 or 1
+  local nextNode = active.routeNodes[active.routeIndex + 1]
+
+  if me.z ~= node.z then
+    active.routeIndex = active.routeIndex + 1
+    return true
+  end
+
+  if distance2d(me, nodePos) <= reachDistance then
+    if nextNode and nextNode.z ~= node.z then
+      if tm >= (active.nextTransitionActionAt or 0) then
+        active.nextTransitionActionAt = tm + CONFIG.transitionActionInterval
+        navInfo("Executando transition da rota em " .. posText(nodePos) .. " para " .. posText(nextNode))
+        performTransitionAction({ name = "route " .. tostring(node.index), from = nodePos, to = routeNodePos(nextNode), action = "walk" })
+      end
+      return true
+    end
+
+    active.routeIndex = active.routeIndex + 1
+    return true
+  end
+
+  if tm >= (active.nextRouteWalkAt or 0) then
+    active.nextRouteWalkAt = tm + CONFIG.transitionWalkInterval
+    navInfo("Seguindo rota embutida node " .. tostring(node.index) .. " em " .. posText(nodePos))
+    autoWalkTo(nodePos)
+  end
+
+  return true
+end
+
 local function estimateCost(fromPos, targetPos)
   if not fromPos or not targetPos then return 999999 end
 
   local base = distanceCost(fromPos, targetPos)
   if hasDirectPath(fromPos, targetPos) then return base end
+
+  local startNode = nearestRouteNode(fromPos, true)
+  local goalNode = nearestRouteNode(targetPos, false)
+  if startNode and goalNode then
+    local _, routeCost = findRoutePath(startNode.index, goalNode.index)
+    if routeCost then
+      return routeCost + distance2d(fromPos, routeNodePos(startNode)) + distance2d(targetPos, routeNodePos(goalNode))
+    end
+  end
 
   local best = base + CONFIG.noPathPenalty
   for _, transition in ipairs(TRANSITIONS or {}) do
@@ -898,7 +1115,7 @@ end
 -- NAVIGATION / TRANSITIONS
 -- ============================================================
 
-local function autoWalkTo(pos)
+function autoWalkTo(pos)
   if not pos or type(autoWalk) ~= "function" then return false end
   local ok = pcall(function() autoWalk({ x = pos.x, y = pos.y, z = pos.z }) end)
   return ok == true
@@ -962,7 +1179,7 @@ local function sayWords(words)
   return false
 end
 
-local function performTransitionAction(transition)
+function performTransitionAction(transition)
   if not transition then return false end
 
   local action = normalize(transition.action or "walk")
@@ -1073,6 +1290,10 @@ local function navigateToActive()
       navInfo("Caminho direto encontrado: autoWalk alvo " .. posText(active.pos))
       autoWalkTo(active.pos)
     end
+    return true
+  end
+
+  if followEmbeddedRoute(active, me, tm) then
     return true
   end
 
@@ -1342,6 +1563,10 @@ local function handleFound(parts)
   occ.hp = hp
 
   if killerState.active and sameOccurrencePos(killerState.active.pos, pos) then
+    if posText(killerState.active.pos) ~= posText(pos) then
+      killerState.active.routeNodes = nil
+      killerState.active.routeTarget = nil
+    end
     killerState.active.pos = posCopy(pos)
     killerState.active.lastSignalAt = nowMs()
     return

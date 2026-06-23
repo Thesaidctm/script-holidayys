@@ -613,6 +613,7 @@ local function getAttackingCreature()
 end
 
 local lastExaltedChaseAt = 0
+local lastLeaderNavAttackAt = 0
 local exaltedHpHoldActive = false
 local lastExaltedHpHoldNoticeAt = 0
 
@@ -694,14 +695,6 @@ local function installNavTargetBotLurePatch()
         return true
       end
 
-      if isNightWolfCreature(creature)
-        and isCurrentInstance()
-        and isLocalInsideNavArea()
-        and isLocalLeader()
-        and navRouteMode == "exalted" then
-        return true
-      end
-
       if BotServerNavTargetBotOriginalBlockedCreature then
         return BotServerNavTargetBotOriginalBlockedCreature(creature)
       end
@@ -766,6 +759,30 @@ local function findVisibleExaltedWolfForProtection()
   return nil
 end
 
+local function visibleNightWolfPressureForLeader()
+  local count = 0
+  local best = nil
+  local bestDistance = math.huge
+  local playerPos = getPlayerPosition()
+
+  for _, creature in ipairs(protectionSpectators()) do
+    if isNightWolfCreature(creature) and creatureHpForProtection(creature) > 0 then
+      count = count + 1
+      local creaturePos = creaturePositionForProtection(creature)
+      local distance = 999999
+      if playerPos and creaturePos and playerPos.z == creaturePos.z then
+        distance = botServerDistance(playerPos, creaturePos)
+      end
+      if not best or distance < bestDistance then
+        best = creature
+        bestDistance = distance
+      end
+    end
+  end
+
+  return count, best
+end
+
 local function cancelProtectedAttack()
   local stopped = false
   if g_game and type(g_game.cancelAttackAndFollow) == "function" then
@@ -815,7 +832,9 @@ local function cancelNightWolfAttack()
   local target = getAttackingCreature()
   if not isNightWolfCreature(target) then return false end
   if navRouteMode == "exalted" then
-    cancelProtectedAttack()
+    setChaseOff()
+    markNavLureMovement(NAV_LURE_WITH_TARGETBOT_MS)
+    return true
   end
   setChaseOff()
   markNavLureMovement(NAV_LURE_WITH_TARGETBOT_MS)
@@ -826,6 +845,46 @@ local function setChaseOn()
   if g_game and type(g_game.setChaseMode) == "function" then
     pcall(function() g_game.setChaseMode(1) end)
   end
+end
+
+local function attackLeaderNavCreature(creature, interval)
+  if not creature or not g_game or type(g_game.attack) ~= "function" then return false end
+
+  local currentTime = navMillis()
+  local currentTarget = getAttackingCreature()
+  interval = tonumber(interval) or 150
+
+  if currentTarget == creature and currentTime - lastLeaderNavAttackAt < interval then
+    return true
+  end
+
+  if currentTarget ~= creature or currentTime - lastLeaderNavAttackAt >= interval then
+    lastLeaderNavAttackAt = currentTime
+    pcall(function() g_game.attack(creature) end)
+  end
+
+  return true
+end
+
+local function attackNightWolfWhileWalkingForLeader()
+  if not isLocalLeader() or navRouteMode ~= "exalted" or not isLocalInsideNavArea() then return false end
+
+  local target = getAttackingCreature()
+  if isNightWolfCreature(target) then
+    setChaseOff()
+    markNavLureMovement(NAV_LURE_WITH_TARGETBOT_MS)
+    return true
+  end
+
+  local _, nightTarget = visibleNightWolfPressureForLeader()
+  if nightTarget then
+    attackLeaderNavCreature(nightTarget, 200)
+    setChaseOff()
+    markNavLureMovement(NAV_LURE_WITH_TARGETBOT_MS)
+    return true
+  end
+
+  return false
 end
 
 local function chaseExaltedWolfForLeader()
@@ -841,18 +900,21 @@ local function chaseExaltedWolfForLeader()
   ExaltedLeaderWatchdog.missingAt = 0
   pauseCavebotForExalted()
   pauseTargetbotForExalted()
-  local currentTarget = getAttackingCreature()
-  if isNightWolfCreature(currentTarget) then
-    cancelNightWolfAttack()
-    currentTarget = nil
+
+  local nightCount, nightTarget = visibleNightWolfPressureForLeader()
+  local pressureTarget = nightCount > 2 and nightTarget or nil
+  local attackTarget = pressureTarget or wolf
+
+  if attackLeaderNavCreature(attackTarget, 100) then
+    lastExaltedChaseAt = currentTime
   end
 
-  if g_game and type(g_game.attack) == "function"
-    and (currentTarget ~= wolf or currentTime - lastExaltedChaseAt >= 100) then
-    lastExaltedChaseAt = currentTime
-    pcall(function() g_game.attack(wolf) end)
+  if pressureTarget then
+    setChaseOff()
+    markNavLureMovement(NAV_LURE_WITH_TARGETBOT_MS)
+  else
+    setChaseOn()
   end
-  setChaseOn()
   return true
 end
 
@@ -860,8 +922,9 @@ local isGameOnline
 
 local function shouldYieldToCombat()
   if isLocalLeader() and navRouteMode == "exalted" then
-    chaseExaltedWolfForLeader()
-    cancelNightWolfAttack()
+    if not chaseExaltedWolfForLeader() then
+      attackNightWolfWhileWalkingForLeader()
+    end
     return false
   end
   cancelNightWolfAttack()

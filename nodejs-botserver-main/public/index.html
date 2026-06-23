@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BotServer Statistics</title>
+    <link rel="stylesheet" href="style.css?v=2026062290" />
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>BotServer - Statistics</h1>
+            <div class="refresh-controls">
+                <label>
+                    <input type="checkbox" id="auto-refresh-toggle" checked>
+                    Auto Refresh
+                </label>
+                <input type="number" id="refresh-interval" value="1" min="1" max="60" step="1">
+                <span>sec</span>
+                <button class="refresh-btn" onclick="fetchStats()">Refresh Now</button>
+            </div>
+        </header>
+
+        <h2>WebSocket Stats</h2>
+        <div class="stats-overview">
+            <div class="stat-card">
+                <h3>Active Connections</h3>
+                <div class="stat-value" id="connections">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Channels</h3>
+                <div class="stat-value" id="channels">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Packets</h3>
+                <div class="stat-value" id="packets">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Blocked</h3>
+                <div class="stat-value" id="ws-blocked">0</div>
+            </div>
+        </div>
+
+        <h2>HTTP Stats</h2>
+        <div class="stats-overview">
+            <div class="stat-card">
+                <h3>Allowed</h3>
+                <div class="stat-value" id="http-allowed">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Blocked</h3>
+                <div class="stat-value" id="http-blocked">0</div>
+            </div>
+        </div>
+            
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('channels-tab')">Channels</div>
+            <div class="tab" onclick="showTab('users-tab')">Users</div>
+            <div class="tab" onclick="showTab('characters-tab')">Characters</div>
+            <div class="tab" onclick="showTab('locations-tab')">Guild Locations</div>
+            <div class="tab" onclick="showTab('nav-debug-tab')">NAV Debug</div>
+            <div class="tab" onclick="showTab('tier-orbs-tab')">Tier Orbs</div>
+            <div class="tab" onclick="showTab('access-tab')">Acessos</div>
+        </div>
+        
+        <div id="channels-tab" class="tab-content channels-container active">
+            <h2>Active Channels</h2>
+            <table id="channels-table">
+                <thead>
+                    <tr>
+                        <th>Channel Name</th>
+                        <th># of Users</th>
+                        <th>Created</th>
+                    </tr>
+                </thead>
+                <tbody id="channels-body">
+                    <!-- Channel data will appear here -->
+                </tbody>
+            </table>
+        </div>
+            
+        <div id="users-tab" class="tab-content users-container">
+            <h2>Active Users</h2>
+            <table id="users-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Channel</th>
+                        <th>Ping</th>
+                        <th>Messages</th>
+                        <th>Packets</th>
+                        <th>Connected Time</th>
+                    </tr>
+                </thead>
+                <tbody id="users-body">
+                    <!-- User data will appear here -->
+                </tbody>
+            </table>
+        </div>
+        
+        <div id="characters-tab" class="tab-content characters-container">
+            <h2>Tibia Characters</h2>
+            <div class="responsive-table"></div>
+            <table id="characters-table">
+                <thead>
+                    <tr>
+                        <th>Character</th>
+                        <th>Level</th>
+                        <th>Vocation</th>
+                        <th>Health</th>
+                        <th>Mana</th>
+                        <th>Experience</th>
+                        <th>Location</th>
+                        <th>Last Update</th>
+                    </tr>
+                </thead>
+                <tbody id="characters-body">
+                    <!-- Character data will appear here -->
+                </tbody>
+            </table>
+        </div>
+
+        <div id="locations-tab" class="tab-content locations-container">
+            <h2>Guild Locations</h2>
+            <div id="guild-map-container">
+                <div class="map-filter-row">
+                    <label><input type="checkbox" id="guild-map-show-deaths" checked> Mortes exatas</label>
+                    <label><input type="checkbox" id="guild-map-show-heatmap" checked> Heatmap</label>
+                    <label><input type="checkbox" id="guild-map-heatmap-regional" checked> Heatmap XY</label>
+                    <label><input type="checkbox" id="guild-map-heatmap-by-floor"> Separar Z</label>
+                    <label><input type="checkbox" id="guild-map-heatmap-project-z7" checked> Projetar Z7</label>
+                    <button type="button" id="guild-map-go-heatmap">Ir heatmap Z7</button>
+                    <label><input type="checkbox" id="guild-map-follow-selected" checked> Follow</label>
+                    <select id="guild-map-heatmap-range">
+                        <option value="today">Today</option>
+                        <option value="7">Last 7 days</option>
+                        <option value="30">Last 30 days</option>
+                        <option value="all" selected>All</option>
+                    </select>
+                </div>
+                <div id="guild-map">
+                    <img id="guild-map-image" alt="">
+                    <div class="map-controls zoom-controls">
+                        <button type="button" id="guild-map-zoom-in" title="Zoom in">+</button>
+                        <button type="button" id="guild-map-zoom-out" title="Zoom out">-</button>
+                    </div>
+                    <div class="map-controls floor-controls">
+                        <button type="button" id="guild-map-floor-up" title="Floor up">▲</button>
+                        <span id="guild-map-floor">-</span>
+                        <button type="button" id="guild-map-floor-down" title="Floor down">▼</button>
+                    </div>
+                    <div class="map-controls pan-controls">
+                        <button type="button" id="guild-map-pan-up" title="North">N</button>
+                        <button type="button" id="guild-map-pan-left" title="West">W</button>
+                        <button type="button" id="guild-map-pan-center" title="Center">C</button>
+                        <button type="button" id="guild-map-pan-right" title="East">E</button>
+                        <button type="button" id="guild-map-pan-down" title="South">S</button>
+                    </div>
+                    <div class="map-crosshair"></div>
+                    <div id="guild-map-pins"></div>
+                </div>
+                <div class="map-footer">
+                    <span id="guild-map-focus">Clique em um char para centralizar no minimapa.</span>
+                    <span id="guild-settings-status"></span>
+                    <span id="guild-map-count">0 players</span>
+                </div>
+            </div>
+            <table id="locations-table">
+                <thead>
+                    <tr>
+                        <th>Character</th>
+                        <th>Channel</th>
+                        <th>Level</th>
+                        <th>Vocation</th>
+                        <th>Status</th>
+                        <th>Leader</th>
+                        <th>Caller</th>
+                        <th>Location</th>
+                        <th>Map</th>
+                        <th>Last Update</th>
+                    </tr>
+                </thead>
+                <tbody id="locations-body">
+                    <!-- Guild location data will appear here -->
+                </tbody>
+            </table>
+        </div>
+
+        <div id="nav-debug-tab" class="tab-content nav-debug-container">
+            <div class="nav-debug-title-row">
+                <h2>NAV Debug</h2>
+                <div class="nav-debug-controls">
+                    <select id="nav-debug-scout"></select>
+                    <button type="button" id="nav-debug-simulate">Simular coordenada</button>
+                    <button type="button" id="nav-debug-refresh">Atualizar</button>
+                </div>
+            </div>
+            <div id="nav-debug-status">Aguardando eventos.</div>
+            <table id="nav-debug-table">
+                <thead>
+                    <tr>
+                        <th>Hora</th>
+                        <th>Tipo</th>
+                        <th>Topico</th>
+                        <th>Canal</th>
+                        <th>Remetente</th>
+                        <th>Coordenada</th>
+                        <th>Recebedores</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="nav-debug-body"></tbody>
+            </table>
+        </div>
+
+        <div id="tier-orbs-tab" class="tab-content tier-orbs-container">
+            <div class="tier-title-row">
+                <div>
+                    <h2>Tier Orbs Division</h2>
+                    <div id="tier-collection-status">Coleta nao iniciada.</div>
+                </div>
+                <button type="button" id="tier-start-collection">Iniciar coleta de Tier Orb</button>
+            </div>
+
+            <div class="tier-card-grid">
+                <div class="stat-card"><h3>Personagens online</h3><div class="stat-value" id="tier-detected">0</div></div>
+                <div class="stat-card"><h3>Personagens elegíveis</h3><div class="stat-value" id="tier-eligible">0</div></div>
+                <div class="stat-card"><h3>Recebedores ativos / Cotas</h3><div class="stat-value" id="tier-receivers">0</div></div>
+                <div class="stat-card"><h3>Orbs registradas hoje</h3><div class="stat-value" id="tier-orbs-today">0</div></div>
+                <div class="stat-card"><h3>Orbs inteiras a pagar</h3><div class="stat-value" id="tier-total">0</div></div>
+                <div class="stat-card"><h3>Sobra técnica</h3><div class="stat-value" id="tier-leftovers">0</div></div>
+            </div>
+
+            <section class="tier-split-summary">
+                <div class="tier-section-head">
+                    <h3>Divisao por recebedor</h3>
+                    <span id="tier-split-note">Cada grupo ativo conta como 1 cota.</span>
+                </div>
+                <table id="tier-split-table">
+                    <thead>
+                        <tr>
+                            <th>Recebedor</th>
+                            <th>Personagens vinculados</th>
+                            <th>Elegíveis agora</th>
+                            <th>Cota ativa</th>
+                            <th>Crédito do último drop</th>
+                            <th>Crédito acumulado hoje</th>
+                            <th>Orbs inteiras a receber</th>
+                            <th>Saldo decimal</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tier-split-body"></tbody>
+                </table>
+            </section>
+
+            <div class="tier-actions">
+                <div class="tier-form tier-auto-box">
+                    <h3>Auto Backpack Tracking</h3>
+                    <div class="tier-auto-item">Tier Orb item ID: <strong>11844</strong></div>
+                    <div class="tier-auto-item">Cada grupo de recebedor com personagens elegiveis conta como <strong>1 cota</strong>.</div>
+                    <div>Characters report open backpack totals automatically. Positive item deltas register the drop.</div>
+                    <div id="tier-auto-status">Waiting for reports...</div>
+                </div>
+            </div>
+
+            <section class="tier-group-manager">
+                <div class="tier-group-toolbar">
+                    <div>
+                        <h3>Agrupamento de recebedores</h3>
+                        <span id="tier-group-status">Arraste personagens para dentro dos grupos.</span>
+                    </div>
+                    <button type="button" id="tier-create-group">Criar recebedor</button>
+                </div>
+                <div class="tier-group-grid">
+                    <div class="tier-panel">
+                        <div class="tier-panel-head">
+                            <h4>Personagens detectados</h4>
+                            <input type="search" id="tier-character-search" placeholder="Buscar personagem">
+                        </div>
+                        <div id="tier-character-list" class="tier-character-list"></div>
+                    </div>
+                    <div class="tier-panel">
+                        <div class="tier-panel-head">
+                            <h4>Recebedores / Divisores</h4>
+                            <input type="search" id="tier-receiver-search" placeholder="Buscar recebedor">
+                        </div>
+                        <div id="tier-group-list" class="tier-group-list"></div>
+                    </div>
+                </div>
+            </section>
+
+            <details class="tier-settings">
+                <summary>Area Settings</summary>
+                <div class="tier-settings-grid">
+                    <label>
+                        Valid event areas
+                        <textarea id="tier-event-areas" rows="4" placeholder="Name: x1,y1,z1,x2,y2,z2"></textarea>
+                    </label>
+                    <label>
+                        DP/depot areas
+                        <textarea id="tier-depot-areas" rows="4" placeholder="Blank uses default DP areas"></textarea>
+                    </label>
+                </div>
+                <button type="button" id="tier-save-settings">Save Areas</button>
+                <span id="tier-settings-status"></span>
+            </details>
+
+            <h3>Backpack Reports</h3>
+            <table id="tier-orb-reports-table">
+                <thead>
+                    <tr>
+                        <th>Character</th>
+                        <th>Tier Orbs</th>
+                        <th>Last Delta</th>
+                        <th>Role</th>
+                        <th>Position</th>
+                        <th>Reason</th>
+                        <th>Last Update</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="tier-orb-reports-body"></tbody>
+            </table>
+
+            <h3>Daily History</h3>
+            <div id="tier-history"></div>
+
+            <h3>Deaths</h3>
+            <table id="tier-deaths-table">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Position</th>
+                        <th>Orbs</th>
+                        <th>Personagens elegíveis</th>
+                        <th>Cotas</th>
+                        <th>Crédito por recebedor</th>
+                        <th>Sobra técnica</th>
+                    </tr>
+                </thead>
+                <tbody id="tier-deaths-body"></tbody>
+            </table>
+        </div>
+
+        <div id="access-tab" class="tab-content access-container">
+            <div class="access-title-row">
+                <div>
+                    <h2>Acessos do Dashboard</h2>
+                    <div id="access-current-user">Carregando acesso atual...</div>
+                </div>
+                <span id="access-status"></span>
+            </div>
+
+            <div id="access-admin-panel">
+                <section class="access-form">
+                    <h3>Cadastrar pessoa</h3>
+                    <div class="access-form-grid">
+                        <input type="text" id="access-username" placeholder="usuario">
+                        <input type="password" id="access-password" placeholder="senha">
+                        <select id="access-role">
+                            <option value="user">Usuario</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                        <label class="access-check"><input type="checkbox" id="access-active" checked> Ativo</label>
+                        <button type="button" id="access-create">Cadastrar</button>
+                    </div>
+                    <p>O admin principal continua sendo definido no servidor. Aqui voce cria acessos adicionais para o dashboard.</p>
+                </section>
+
+                <table id="access-users-table">
+                    <thead>
+                        <tr>
+                            <th>Usuario</th>
+                            <th>Tipo</th>
+                            <th>Status</th>
+                            <th>Origem</th>
+                            <th>Ultimo login</th>
+                            <th>Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody id="access-users-body"></tbody>
+                </table>
+            </div>
+
+            <div id="access-no-admin" class="access-empty">
+                Somente admin pode cadastrar ou alterar acessos.
+            </div>
+        </div>
+
+        <div class="info-bar">
+            <div class="ws-uptime" title="WebSocket Started: -">
+                WebSocket Uptime: <span id="ws-uptime">-</span>
+            </div>
+            <div id="last-updated">
+                Last updated: -
+            </div>
+        </div>
+
+    </div>
+    <script src="script.js?v=2026062290"></script>
+</body>
+</html>
